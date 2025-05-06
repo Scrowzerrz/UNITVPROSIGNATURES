@@ -1087,7 +1087,62 @@ def payment_done(call):
 def cancel_payment_callback(call):
     payment_id = call.data.split("_")[2]
     
-    # Cancel the payment
+    try:
+        # Obter dados do pagamento antes de cancelar
+        payment = get_payment(payment_id)
+        
+        # Se for um pagamento do Mercado Pago e tiver um ID de pagamento MP, cancelar na API do MP
+        if payment and payment.get('mp_payment_id'):
+            logger.info(f"Canceling Mercado Pago payment: {payment.get('mp_payment_id')}")
+            
+            try:
+                # Obter o token do Mercado Pago
+                bot_config = read_json_file(BOT_CONFIG_FILE)
+                mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
+                access_token = mp_settings.get('access_token')
+                
+                if access_token:
+                    # Tentar cancelar o pagamento no Mercado Pago
+                    headers = {
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                        "X-Idempotency-Key": str(uuid.uuid4())
+                    }
+                    
+                    # Verificar o status atual do pagamento
+                    mp_payment_id = payment.get('mp_payment_id')
+                    mp_status_response = requests.get(
+                        f"https://api.mercadopago.com/v1/payments/{mp_payment_id}",
+                        headers=headers
+                    )
+                    
+                    if mp_status_response.status_code == 200:
+                        mp_payment_data = mp_status_response.json()
+                        mp_status = mp_payment_data.get('status')
+                        
+                        # Se o pagamento ainda estiver pendente, cancelá-lo
+                        if mp_status in ['pending', 'in_process', 'authorized']:
+                            cancel_data = {"status": "cancelled"}
+                            mp_cancel_response = requests.put(
+                                f"https://api.mercadopago.com/v1/payments/{mp_payment_id}",
+                                headers=headers,
+                                json=cancel_data
+                            )
+                            
+                            if mp_cancel_response.status_code in [200, 201]:
+                                logger.info(f"Mercado Pago payment {mp_payment_id} successfully cancelled")
+                            else:
+                                logger.warning(f"Failed to cancel Mercado Pago payment {mp_payment_id}: {mp_cancel_response.status_code}")
+                        else:
+                            logger.info(f"Mercado Pago payment {mp_payment_id} already in final state: {mp_status}")
+                    else:
+                        logger.warning(f"Failed to get Mercado Pago payment status: {mp_status_response.status_code}")
+            except Exception as e:
+                logger.error(f"Error cancelling Mercado Pago payment: {e}")
+    except Exception as e:
+        logger.error(f"Error in payment cancellation pre-processing: {e}")
+    
+    # Cancel the payment in our system regardless of MP API result
     if cancel_payment(payment_id):
         bot.answer_callback_query(call.id, "Pagamento cancelado com sucesso!")
         
@@ -1198,6 +1253,53 @@ def reject_payment(call):
     if not payment:
         bot.answer_callback_query(call.id, "Pagamento não encontrado!")
         return
+    
+    # Se for um pagamento do Mercado Pago, cancelar na API
+    if payment.get('mp_payment_id'):
+        try:
+            # Obter o token do Mercado Pago
+            bot_config = read_json_file(BOT_CONFIG_FILE)
+            mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
+            access_token = mp_settings.get('access_token')
+            
+            if access_token:
+                # Configurar headers
+                headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json",
+                    "X-Idempotency-Key": str(uuid.uuid4())
+                }
+                
+                # Verificar o status atual do pagamento
+                mp_payment_id = payment.get('mp_payment_id')
+                mp_status_response = requests.get(
+                    f"https://api.mercadopago.com/v1/payments/{mp_payment_id}",
+                    headers=headers
+                )
+                
+                if mp_status_response.status_code == 200:
+                    mp_payment_data = mp_status_response.json()
+                    mp_status = mp_payment_data.get('status')
+                    
+                    # Se o pagamento ainda estiver pendente, cancelá-lo
+                    if mp_status in ['pending', 'in_process', 'authorized']:
+                        cancel_data = {"status": "cancelled"}
+                        mp_cancel_response = requests.put(
+                            f"https://api.mercadopago.com/v1/payments/{mp_payment_id}",
+                            headers=headers,
+                            json=cancel_data
+                        )
+                        
+                        if mp_cancel_response.status_code in [200, 201]:
+                            logger.info(f"Mercado Pago payment {mp_payment_id} successfully cancelled upon rejection")
+                        else:
+                            logger.warning(f"Failed to cancel Mercado Pago payment {mp_payment_id} upon rejection: {mp_cancel_response.status_code}")
+                    else:
+                        logger.info(f"Mercado Pago payment {mp_payment_id} already in final state: {mp_status}")
+                else:
+                    logger.warning(f"Failed to get Mercado Pago payment status for rejection: {mp_status_response.status_code}")
+        except Exception as e:
+            logger.error(f"Error cancelling Mercado Pago payment upon rejection: {e}")
     
     # Update payment status
     update_payment(payment_id, {'status': 'rejected'})
