@@ -346,10 +346,14 @@ def show_plans(call):
     
     # Add buttons for each plan
     for plan_id, plan in PLANS.items():
+        # Criar callback_data com o ID exato como está no dicionário PLANS
+        callback_data = f"select_plan_{plan_id}"
+        logger.info(f"Creating plan button with callback_data: {callback_data}")
+        
         keyboard.add(
             types.InlineKeyboardButton(
                 f"🛍️ {plan['name']} - {format_currency(calculate_plan_price(user_id, plan_id))}",
-                callback_data=f"select_plan_{plan_id}"
+                callback_data=callback_data
             )
         )
     
@@ -371,6 +375,8 @@ def select_plan(call):
     user_id = call.from_user.id
     parts = call.data.split("_")
     
+    logger.info(f"Processing plan selection: {call.data}, parts: {parts}")
+    
     # Garantir que temos todas as partes necessárias
     if len(parts) < 3:
         bot.answer_callback_query(call.id, "Formato de plano inválido!")
@@ -378,12 +384,24 @@ def select_plan(call):
         show_plans(call)
         return
     
+    # O ID do plano pode estar em diferentes formatos, verificar os possíveis
     plan_id = parts[2]
+    
+    # Se o plano tiver underscores adicionais, reconstruir corretamente
+    if len(parts) > 3 and parts[2] == "30" and parts[3] == "days":
+        plan_id = "30_days"
+    elif len(parts) > 3 and parts[2] == "6" and parts[3] == "months":
+        plan_id = "6_months"
+    elif len(parts) > 3 and parts[2] == "1" and parts[3] == "year":
+        plan_id = "1_year"
+        
+    logger.info(f"Plan ID after parsing: {plan_id}")
     
     # Validar o plano e verificar se está no formato correto
     if plan_id not in PLANS:
-        bot.answer_callback_query(call.id, "Plano inválido!")
-        logger.error(f"Invalid plan ID: {plan_id}, available plans: {list(PLANS.keys())}")
+        valid_plans = list(PLANS.keys())
+        bot.answer_callback_query(call.id, f"Plano inválido! Planos válidos: {valid_plans}")
+        logger.error(f"Invalid plan ID: {plan_id}, available plans: {valid_plans}")
         show_plans(call)
         return
     
