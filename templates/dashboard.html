@@ -154,7 +154,7 @@
                                         <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                             Logins disponíveis
                                         </div>
-                                        <div class="h5 mb-0 font-weight-bold">{{ stats.available_logins.30_days + stats.available_logins.6_months + stats.available_logins.1_year }}</div>
+                                        <div class="h5 mb-0 font-weight-bold">{{ stats.available_logins['30_days'] + stats.available_logins['6_months'] + stats.available_logins['1_year'] }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -217,17 +217,17 @@
                 </div>
                 {% endif %}
                 
-                {% if stats.available_logins.30_days == 0 or stats.available_logins.6_months == 0 or stats.available_logins.1_year == 0 %}
+                {% if stats.available_logins['30_days'] == 0 or stats.available_logins['6_months'] == 0 or stats.available_logins['1_year'] == 0 %}
                 <div class="alert alert-warning alert-dismissible fade show" role="alert">
                     <strong><i class="fas fa-exclamation-triangle me-2"></i> Atenção!</strong> Alguns planos estão sem logins disponíveis:
                     <ul class="mb-0 mt-2">
-                        {% if stats.available_logins.30_days == 0 %}
+                        {% if stats.available_logins['30_days'] == 0 %}
                         <li>Plano de 30 dias: <span class="badge bg-danger">Sem logins</span></li>
                         {% endif %}
-                        {% if stats.available_logins.6_months == 0 %}
+                        {% if stats.available_logins['6_months'] == 0 %}
                         <li>Plano de 6 meses: <span class="badge bg-danger">Sem logins</span></li>
                         {% endif %}
-                        {% if stats.available_logins.1_year == 0 %}
+                        {% if stats.available_logins['1_year'] == 0 %}
                         <li>Plano de 1 ano: <span class="badge bg-danger">Sem logins</span></li>
                         {% endif %}
                     </ul>
@@ -314,9 +314,9 @@
                     datasets: [{
                         label: 'Logins Disponíveis',
                         data: [
-                            {{ stats.available_logins.30_days }}, 
-                            {{ stats.available_logins.6_months }}, 
-                            {{ stats.available_logins.1_year }}
+                            {{ stats.available_logins['30_days'] }}, 
+                            {{ stats.available_logins['6_months'] }}, 
+                            {{ stats.available_logins['1_year'] }}
                         ],
                         backgroundColor: [
                             'rgba(78, 115, 223, 0.8)',
