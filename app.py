@@ -529,6 +529,113 @@ def delete_coupon_route(code):
     
     return redirect(url_for('coupons'))
 
+# Payment Settings Routes
+@app.route('/payment-settings')
+@login_required
+def payment_settings():
+    """Payment settings page with PIX and Mercado Pago configuration"""
+    try:
+        # Get payment settings from bot_config
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        payment_settings = bot_config.get('payment_settings', {})
+        
+        # Get PIX settings
+        pix_settings = payment_settings.get('pix', {
+            'enabled': True,
+            'key': 'nossaempresa@email.com',
+            'name': 'Empresa UniTV LTDA',
+            'bank': 'Banco UniTV'
+        })
+        
+        # Get Mercado Pago settings
+        mercado_pago_settings = payment_settings.get('mercado_pago', {
+            'enabled': False,
+            'access_token': '',
+            'public_key': ''
+        })
+        
+        return render_template('payment_settings.html', 
+                              pix=pix_settings, 
+                              mercado_pago=mercado_pago_settings,
+                              message=request.args.get('message'),
+                              message_type=request.args.get('message_type', 'info'))
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Error loading payment settings: {e}")
+        flash('Erro ao carregar configurações de pagamento.', 'danger')
+        return redirect(url_for('dashboard'))
+
+@app.route('/payment-settings/pix', methods=['POST'])
+@login_required
+def save_pix_settings():
+    """Save PIX payment settings"""
+    try:
+        # Get current settings
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        payment_settings = bot_config.get('payment_settings', {})
+        
+        # Update PIX settings
+        pix_settings = {
+            'enabled': 'enabled' in request.form,
+            'key': request.form.get('key', ''),
+            'name': request.form.get('name', ''),
+            'bank': request.form.get('bank', '')
+        }
+        
+        # Update settings in config
+        if 'payment_settings' not in bot_config:
+            bot_config['payment_settings'] = {}
+        
+        bot_config['payment_settings']['pix'] = pix_settings
+        
+        # Save updated config
+        write_json_file(BOT_CONFIG_FILE, bot_config)
+        
+        return redirect(url_for('payment_settings', 
+                              message='Configurações PIX salvas com sucesso!',
+                              message_type='success'))
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Error saving PIX settings: {e}")
+        return redirect(url_for('payment_settings', 
+                              message='Erro ao salvar configurações PIX.',
+                              message_type='danger'))
+
+@app.route('/payment-settings/mercado-pago', methods=['POST'])
+@login_required
+def save_mercado_pago_settings():
+    """Save Mercado Pago payment settings"""
+    try:
+        # Get current settings
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        payment_settings = bot_config.get('payment_settings', {})
+        
+        # Update Mercado Pago settings
+        mp_settings = {
+            'enabled': 'enabled' in request.form,
+            'access_token': request.form.get('access_token', ''),
+            'public_key': request.form.get('public_key', '')
+        }
+        
+        # Update settings in config
+        if 'payment_settings' not in bot_config:
+            bot_config['payment_settings'] = {}
+        
+        bot_config['payment_settings']['mercado_pago'] = mp_settings
+        
+        # Save updated config
+        write_json_file(BOT_CONFIG_FILE, bot_config)
+        
+        return redirect(url_for('payment_settings', 
+                              message='Configurações Mercado Pago salvas com sucesso!',
+                              message_type='success'))
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Error saving Mercado Pago settings: {e}")
+        return redirect(url_for('payment_settings', 
+                              message='Erro ao salvar configurações Mercado Pago.',
+                              message_type='danger'))
+
 # Error handlers
 @app.errorhandler(404)
 def page_not_found(e):
