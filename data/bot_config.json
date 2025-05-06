@@ -20,5 +20,6 @@
             "access_token": "APP_USR-4744877048888435-050521-412266919af456dab91398ee47629189-2244848104",
             "public_key": "APP_USR-6d31b63f-a284-43a1-be56-3e096be818a4"
         }
-    }
+    },
+    "pending_payment_notified": true
 }

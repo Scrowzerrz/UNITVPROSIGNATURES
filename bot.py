@@ -897,7 +897,8 @@ def pay_with_pix_mercado_pago(call):
         # Configurar headers
         headers = {
             "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": str(uuid.uuid4())  # Adicionar cabeçalho de idempotência
         }
         
         # Fazer requisição à API do Mercado Pago
