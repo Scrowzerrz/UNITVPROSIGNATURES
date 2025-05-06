@@ -597,16 +597,88 @@ def payment_settings():
         # Log debug information
         logger.debug(f"Payment settings loaded successfully: PIX: {pix_settings.get('enabled')}, MP: {mercado_pago_settings.get('enabled')}")
         
-        return render_template('payment_settings.html', 
-                              pix=pix_settings, 
-                              mercado_pago=mercado_pago_settings,
-                              stats=stats,
-                              message=request.args.get('message'),
-                              message_type=request.args.get('message_type', 'info'))
+        # Use try/except for template rendering
+        try:
+            return render_template('payment_settings.html', 
+                                pix=pix_settings, 
+                                mercado_pago=mercado_pago_settings,
+                                stats=stats,
+                                message=request.args.get('message'),
+                                message_type=request.args.get('message_type', 'info'))
+        except Exception as template_error:
+            log_exception(template_error)
+            logger.error(f"Error rendering payment_settings template: {template_error}")
+            flash('Erro ao renderizar a página de configurações de pagamento.', 'danger')
+            return redirect(url_for('dashboard'))
     except Exception as e:
         log_exception(e)
         logger.error(f"Error loading payment settings: {e}")
         flash('Erro ao carregar configurações de pagamento.', 'danger')
+        return redirect(url_for('dashboard'))
+
+# Alternative payment settings route
+@app.route('/payment-config')
+@login_required
+def payment_config():
+    """Alternative route to payment settings"""
+    try:
+        # Get payment settings from bot_config
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        payment_settings = bot_config.get('payment_settings', {})
+        
+        # Get PIX settings or set default values if they don't exist
+        pix_settings = payment_settings.get('pix', {})
+        if not pix_settings:
+            pix_settings = {
+                'enabled': True,
+                'key': 'nossaempresa@email.com',
+                'name': 'Empresa UniTV LTDA',
+                'bank': 'Banco UniTV'
+            }
+        
+        # Get Mercado Pago settings or set default values if they don't exist
+        mercado_pago_settings = payment_settings.get('mercado_pago', {})
+        if not mercado_pago_settings:
+            mercado_pago_settings = {
+                'enabled': False,
+                'access_token': '',
+                'public_key': ''
+            }
+        
+        # Get data for stats (required by dashboard.html template)
+        users = read_json_file(USERS_FILE) or {}
+        payments = read_json_file(PAYMENTS_FILE) or {}
+        logins = read_json_file(LOGINS_FILE) or {}
+        
+        # Create stats object for the dashboard template
+        stats = {
+            'total_users': len(users),
+            'active_users': sum(1 for user in users.values() if user.get('subscription_end') and 
+                            datetime.fromisoformat(user.get('subscription_end')) > datetime.now()),
+            'pending_payments': sum(1 for p in payments.values() if p.get('status') == 'pending'),
+            'available_logins': {
+                '30_days': len(logins.get('30_days', [])),
+                '6_months': len(logins.get('6_months', [])),
+                '1_year': len(logins.get('1_year', []))
+            },
+            'pending_approvals': sum(1 for p in payments.values() if p.get('status') == 'pending_approval'),
+            'waiting_for_login': sum(1 for p in payments.values() if p.get('status') == 'approved' and not p.get('login_delivered')),
+            'sales_status': sales_enabled(),
+            'active_coupons': len(bot_config.get('coupons', {}))
+        }
+        
+        logger.debug(f"Alternative payment settings loaded successfully")
+        
+        return render_template('payment_settings.html', 
+                            pix=pix_settings, 
+                            mercado_pago=mercado_pago_settings,
+                            stats=stats,
+                            message=request.args.get('message'),
+                            message_type=request.args.get('message_type', 'info'))
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Error in alternative payment settings route: {e}")
+        flash('Erro ao carregar configurações de pagamento (alternativa).', 'danger')
         return redirect(url_for('dashboard'))
 
 @app.route('/payment-settings/pix', methods=['POST'])
