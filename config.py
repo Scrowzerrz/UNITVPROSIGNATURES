@@ -79,6 +79,19 @@ def init_json_files():
                 'referrer_discount': 10,  # 10% discount
                 'referred_discount': 5,   # 5% discount for referred user
                 'free_month_after_referrals': 3  # Number of successful referrals for free month
+            },
+            'payment_settings': {
+                'pix': {
+                    'enabled': True,
+                    'key': 'nossaempresa@email.com',
+                    'name': 'Empresa UniTV LTDA',
+                    'bank': 'Banco UniTV'
+                },
+                'mercado_pago': {
+                    'enabled': False,
+                    'access_token': '',
+                    'public_key': ''
+                }
             }
         }
         with open(BOT_CONFIG_FILE, 'w') as f:

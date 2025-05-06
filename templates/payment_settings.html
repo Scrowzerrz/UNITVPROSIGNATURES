@@ -1,0 +1,107 @@
+{% extends 'dashboard.html' %}
+
+{% block title %}Configurações de Pagamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Configurações de Pagamento</h1>
+
+    {% if message %}
+    <div class="alert alert-{{ message_type }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Configurações PIX</h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('save_pix_settings') }}" method="POST">
+                        <div class="form-group mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="pixEnabled" name="enabled" {% if pix.enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="pixEnabled">Habilitar pagamento via PIX</label>
+                            </div>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="pixKey">Chave PIX</label>
+                            <input type="text" class="form-control" id="pixKey" name="key" value="{{ pix.key }}" required>
+                            <small class="form-text text-muted">Pode ser um CPF/CNPJ, email, telefone ou chave aleatória.</small>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="pixName">Nome do Recebedor</label>
+                            <input type="text" class="form-control" id="pixName" name="name" value="{{ pix.name }}" required>
+                            <small class="form-text text-muted">Nome que aparecerá para o pagador.</small>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="pixBank">Banco</label>
+                            <input type="text" class="form-control" id="pixBank" name="bank" value="{{ pix.bank }}" required>
+                            <small class="form-text text-muted">Banco associado à chave PIX.</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Salvar Configurações PIX</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Configurações Mercado Pago</h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('save_mercado_pago_settings') }}" method="POST">
+                        <div class="form-group mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="mpEnabled" name="enabled" {% if mercado_pago.enabled %}checked{% endif %}>
+                                <label class="form-check-label" for="mpEnabled">Habilitar pagamento via Mercado Pago</label>
+                            </div>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="mpAccessToken">Access Token</label>
+                            <input type="text" class="form-control" id="mpAccessToken" name="access_token" value="{{ mercado_pago.access_token }}">
+                            <small class="form-text text-muted">Token de acesso da API do Mercado Pago.</small>
+                        </div>
+                        <div class="form-group mb-3">
+                            <label for="mpPublicKey">Public Key</label>
+                            <input type="text" class="form-control" id="mpPublicKey" name="public_key" value="{{ mercado_pago.public_key }}">
+                            <small class="form-text text-muted">Chave pública para integração frontend.</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Salvar Configurações Mercado Pago</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Instruções</h6>
+                </div>
+                <div class="card-body">
+                    <h5>Como configurar o PIX:</h5>
+                    <ol>
+                        <li>Insira a sua chave PIX (CPF, email, telefone ou chave aleatória).</li>
+                        <li>Preencha seu nome completo ou razão social.</li>
+                        <li>Informe o banco associado à sua chave PIX.</li>
+                    </ol>
+
+                    <h5>Como configurar o Mercado Pago:</h5>
+                    <ol>
+                        <li>Acesse sua conta no <a href="https://www.mercadopago.com.br/" target="_blank">Mercado Pago</a>.</li>
+                        <li>Vá em "Seu negócio" &gt; "Credenciais".</li>
+                        <li>Copie o "Access Token" e a "Public Key" para os campos acima.</li>
+                        <li>Habilite o pagamento via Mercado Pago.</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

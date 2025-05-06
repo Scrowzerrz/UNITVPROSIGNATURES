@@ -369,11 +369,22 @@ def show_plans(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith("select_plan_"))
 def select_plan(call):
     user_id = call.from_user.id
-    plan_id = call.data.split("_")[2]
+    parts = call.data.split("_")
     
-    # Validate plan
+    # Garantir que temos todas as partes necessárias
+    if len(parts) < 3:
+        bot.answer_callback_query(call.id, "Formato de plano inválido!")
+        logger.error(f"Invalid plan format: {call.data}")
+        show_plans(call)
+        return
+    
+    plan_id = parts[2]
+    
+    # Validar o plano e verificar se está no formato correto
     if plan_id not in PLANS:
         bot.answer_callback_query(call.id, "Plano inválido!")
+        logger.error(f"Invalid plan ID: {plan_id}, available plans: {list(PLANS.keys())}")
+        show_plans(call)
         return
     
     # Calculate price
@@ -568,13 +579,21 @@ def process_payer_name(message, payment_id):
     plan_id = payment['plan_type']
     amount = payment['amount']
     
+    # Get PIX settings from bot_config
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    pix_settings = bot_config.get('payment_settings', {}).get('pix', {})
+    
+    pix_key = pix_settings.get('key', 'nossaempresa@email.com')
+    pix_name = pix_settings.get('name', 'Empresa UniTV LTDA')
+    pix_bank = pix_settings.get('bank', 'Banco UniTV')
+    
     pix_msg = (
         f"🏦 *Informações para Pagamento PIX* 🏦\n\n"
         f"Plano: {PLANS[plan_id]['name']}\n"
         f"Valor: {format_currency(amount)}\n\n"
-        f"*Chave PIX:* `nossaempresa@email.com`\n\n"  # Replace with the actual PIX key
-        f"Nome: Empresa UniTV LTDA\n"  # Replace with the actual company name
-        f"Banco: Banco UniTV\n\n"  # Replace with the actual bank
+        f"*Chave PIX:* `{pix_key}`\n\n"
+        f"Nome: {pix_name}\n"
+        f"Banco: {pix_bank}\n\n"
         f"*Instruções:*\n"
         f"1. Abra seu aplicativo bancário\n"
         f"2. Escolha a opção PIX\n"
@@ -2116,7 +2135,67 @@ def add_allowed_user_command(message):
 # Back to start
 @bot.callback_query_handler(func=lambda call: call.data == "start")
 def back_to_start(call):
-    start_command(call.message)
+    user_id = call.from_user.id
+    user = get_user(user_id)
+    
+    # Create welcome message
+    welcome_msg = (
+        f"👋 Olá {call.from_user.first_name}! Bem-vindo à loja da UniTV! 📺✨\n\n"
+        f"Escolha uma das opções abaixo para continuar:"
+    )
+    
+    # Create keyboard
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Add buttons based on user status
+    if user and user.get('has_active_plan'):
+        plan_type = user.get('plan_type')
+        expiration_date = datetime.fromisoformat(user.get('plan_expiration'))
+        days_left = (expiration_date - datetime.now()).days
+        
+        # Add account info button
+        keyboard.add(
+            types.InlineKeyboardButton("📊 Minha Conta", callback_data="my_account")
+        )
+        
+        # Add renew button if less than 10 days left
+        if days_left <= 10:
+            keyboard.add(
+                types.InlineKeyboardButton("🔄 Renovar Assinatura", callback_data="show_plans")
+            )
+    else:
+        # Check if sales are enabled
+        if sales_enabled():
+            keyboard.add(
+                types.InlineKeyboardButton("🛒 Ver Planos", callback_data="show_plans")
+            )
+        else:
+            welcome_msg += "\n\n⚠️ *As vendas estão temporariamente suspensas devido à alta demanda.* ⚠️"
+    
+    # Add support button
+    keyboard.add(
+        types.InlineKeyboardButton("💬 Suporte", callback_data="support"),
+        types.InlineKeyboardButton("🔗 Programa de Indicação", callback_data="referral_program")
+    )
+    
+    # Edit the message instead of sending new
+    try:
+        bot.edit_message_text(
+            welcome_msg,
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Error editing message: {e}")
+        # Fallback to sending a new message if edit fails
+        bot.send_message(
+            call.message.chat.id,
+            welcome_msg,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
 
 # Main function to start bot
 def run_bot():
