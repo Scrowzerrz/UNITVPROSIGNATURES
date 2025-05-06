@@ -531,13 +531,25 @@ def confirm_plan(call):
     
     user_id = call.from_user.id
     
+    # Check if Mercado Pago is enabled
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    payment_settings = bot_config.get('payment_settings', {})
+    mercado_pago_settings = payment_settings.get('mercado_pago', {})
+    
+    # If Mercado Pago is enabled and configured
+    has_mercado_pago = (
+        mercado_pago_settings.get('enabled', False) and 
+        mercado_pago_settings.get('access_token') and 
+        mercado_pago_settings.get('public_key')
+    )
+    
     # Create payment
     payment_id = create_payment(user_id, plan_id, price, coupon_code)
     
-    # Create message
+    # Create message - Default to PIX payment
     payment_msg = (
-        f"💰 *Pagamento via PIX* 💰\n\n"
-        f"Para concluir sua compra do {PLANS[plan_id]['name']}, precisamos de algumas informações para o pagamento PIX:\n\n"
+        f"💰 *Pagamento - {PLANS[plan_id]['name']}* 💰\n\n"
+        f"Para concluir sua compra, precisamos de algumas informações:\n\n"
         f"Por favor, informe seu Nome Completo ou CNPJ:"
     )
     
@@ -575,7 +587,61 @@ def process_payer_name(message, payment_id):
     
     update_payment(payment_id, {'payer_name': payer_name})
     
-    # Send PIX information
+    # Send payment options
+    plan_id = payment['plan_type']
+    amount = payment['amount']
+    
+    # Get payment settings from bot_config
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    payment_settings = bot_config.get('payment_settings', {})
+    
+    # Check if Mercado Pago is enabled
+    mercado_pago_settings = payment_settings.get('mercado_pago', {})
+    has_mercado_pago = (
+        mercado_pago_settings.get('enabled', False) and
+        mercado_pago_settings.get('access_token') and
+        mercado_pago_settings.get('public_key')
+    )
+    
+    if has_mercado_pago:
+        # Offer payment method selection
+        select_msg = (
+            f"💰 *Escolha seu método de pagamento* 💰\n\n"
+            f"Plano: {PLANS[plan_id]['name']}\n"
+            f"Valor: {format_currency(amount)}\n\n"
+            f"Selecione como deseja pagar:"
+        )
+        
+        # Create payment method keyboard
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        keyboard.add(
+            types.InlineKeyboardButton("💸 Pagar via PIX", callback_data=f"pay_pix_{payment_id}"),
+            types.InlineKeyboardButton("💳 Pagar via Mercado Pago", callback_data=f"pay_mp_{payment_id}"),
+            types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}")
+        )
+        
+        # Send payment selection message
+        bot.send_message(
+            message.chat.id,
+            select_msg,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    else:
+        # Default to PIX payment
+        send_pix_instructions(message, payment_id)
+
+# Function to send PIX payment instructions
+def send_pix_instructions(message, payment_id):
+    # Get payment details
+    payment = get_payment(payment_id)
+    if not payment:
+        bot.send_message(
+            message.chat.id,
+            "❌ Erro ao processar pagamento. Por favor, inicie o processo novamente com /start."
+        )
+        return
+    
     plan_id = payment['plan_type']
     amount = payment['amount']
     
@@ -611,9 +677,82 @@ def process_payer_name(message, payment_id):
     )
     
     # Send message
-    bot.send_message(
-        message.chat.id,
-        pix_msg,
+    if isinstance(message, types.CallbackQuery):
+        # If coming from a callback, edit the message
+        bot.edit_message_text(
+            pix_msg,
+            message.message.chat.id,
+            message.message.message_id,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    else:
+        # If coming from a text message, send a new message
+        bot.send_message(
+            message.chat.id,
+            pix_msg,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
+# Handler for PIX payment method selection
+@bot.callback_query_handler(func=lambda call: call.data.startswith("pay_pix_"))
+def pay_with_pix(call):
+    payment_id = call.data.split("_")[2]
+    send_pix_instructions(call, payment_id)
+
+# Handler for Mercado Pago payment method selection
+@bot.callback_query_handler(func=lambda call: call.data.startswith("pay_mp_"))
+def pay_with_mercado_pago(call):
+    payment_id = call.data.split("_")[2]
+    
+    # Get payment details
+    payment = get_payment(payment_id)
+    if not payment:
+        bot.answer_callback_query(call.id, "Pagamento não encontrado!")
+        return
+    
+    plan_id = payment['plan_type']
+    amount = payment['amount']
+    
+    # Get Mercado Pago settings
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
+    
+    # Check if Mercado Pago is enabled
+    if not mp_settings.get('enabled') or not mp_settings.get('access_token'):
+        bot.answer_callback_query(call.id, "Mercado Pago não está disponível no momento.")
+        # Fallback to PIX
+        send_pix_instructions(call, payment_id)
+        return
+    
+    # Create message with instructions
+    mp_msg = (
+        f"💳 *Pagamento via Mercado Pago* 💳\n\n"
+        f"Plano: {PLANS[plan_id]['name']}\n"
+        f"Valor: {format_currency(amount)}\n\n"
+        f"Para realizar o pagamento, clique no botão abaixo e você será direcionado para o Mercado Pago.\n\n"
+        f"Após concluir o pagamento, retorne aqui e clique em 'Confirmar Pagamento'."
+    )
+    
+    # Create keyboard with payment URL and confirmation buttons
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Add payment link button - In a real implementation, this would generate a Mercado Pago payment link
+    # using their API and the access_token - using a placeholder URL for now
+    payment_text = f"Pagar {format_currency(amount)}"
+    keyboard.add(
+        types.InlineKeyboardButton(text=payment_text, url="https://www.mercadopago.com.br"),
+        types.InlineKeyboardButton("✅ Confirmar Pagamento", callback_data=f"payment_done_{payment_id}"),
+        types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}"),
+        types.InlineKeyboardButton("↩️ Voltar para PIX", callback_data=f"pay_pix_{payment_id}")
+    )
+    
+    # Edit message
+    bot.edit_message_text(
+        mp_msg,
+        call.message.chat.id,
+        call.message.message_id,
         reply_markup=keyboard,
         parse_mode="Markdown"
     )

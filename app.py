@@ -554,9 +554,35 @@ def payment_settings():
             'public_key': ''
         })
         
+        # Get data for stats (required by dashboard.html template)
+        users = read_json_file(USERS_FILE) or {}
+        payments = read_json_file(PAYMENTS_FILE) or {}
+        logins = read_json_file(LOGINS_FILE) or {}
+        
+        # Create stats object for the dashboard template
+        stats = {
+            'total_users': len(users),
+            'active_users': sum(1 for user in users.values() if user.get('subscription_end') and 
+                               datetime.fromisoformat(user.get('subscription_end')) > datetime.now()),
+            'pending_payments': sum(1 for p in payments.values() if p.get('status') == 'pending'),
+            'available_logins': {
+                '30_days': len(logins.get('30_days', [])),
+                '6_months': len(logins.get('6_months', [])),
+                '1_year': len(logins.get('1_year', []))
+            },
+            'pending_approvals': sum(1 for p in payments.values() if p.get('status') == 'pending_approval'),
+            'waiting_for_login': sum(1 for p in payments.values() if p.get('status') == 'approved' and not p.get('login_delivered')),
+            'sales_status': sales_enabled(),
+            'active_coupons': len(bot_config.get('coupons', {}))
+        }
+        
+        # Log debug information
+        logger.debug(f"Payment settings loaded successfully: PIX: {pix_settings['enabled']}, MP: {mercado_pago_settings['enabled']}")
+        
         return render_template('payment_settings.html', 
                               pix=pix_settings, 
                               mercado_pago=mercado_pago_settings,
+                              stats=stats,
                               message=request.args.get('message'),
                               message_type=request.args.get('message_type', 'info'))
     except Exception as e:

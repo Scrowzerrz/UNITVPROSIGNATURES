@@ -95,10 +95,21 @@
                     <h5>Como configurar o Mercado Pago:</h5>
                     <ol>
                         <li>Acesse sua conta no <a href="https://www.mercadopago.com.br/" target="_blank">Mercado Pago</a>.</li>
-                        <li>Vá em "Seu negócio" &gt; "Credenciais".</li>
+                        <li>Vá em "Seu negócio" &gt; "Desenvolvedores" &gt; "Credenciais".</li>
+                        <li>Você verá suas credenciais de produção e teste. Use as credenciais de produção para pagamentos reais.</li>
                         <li>Copie o "Access Token" e a "Public Key" para os campos acima.</li>
                         <li>Habilite o pagamento via Mercado Pago.</li>
                     </ol>
+                    
+                    <div class="alert alert-info mt-3">
+                        <h6><i class="fas fa-info-circle"></i> Informações importantes sobre o Mercado Pago:</h6>
+                        <ul>
+                            <li>O <strong>Access Token</strong> é usado para processar pagamentos no servidor (nunca compartilhe este token).</li>
+                            <li>A <strong>Public Key</strong> é usada para gerar formulários de pagamento no navegador do cliente.</li>
+                            <li>Para receber pagamentos reais, sua conta do Mercado Pago precisa estar verificada.</li>
+                            <li>Você pode testar a integração com as credenciais de teste antes de usar credenciais de produção.</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>
