@@ -1985,8 +1985,8 @@ def admin_login_command(message):
         base_url = os.environ.get('HOST_URL', '')
         login_url = f"{base_url}/login"
         
-        # Send access code to user
-        bot.reply_to(
+        # Send access code to user and guarda o ID da mensagem
+        reply_msg = bot.reply_to(
             message,
             f"🔐 *Acesso ao Painel Administrativo* 🔐\n\n"
             f"Seu código de acesso é:\n\n"
@@ -1997,6 +1997,13 @@ def admin_login_command(message):
             f"⚠️ *Importante*: Guarde este código ou salve esta mensagem para utilizá-lo quando necessário.",
             parse_mode="Markdown"
         )
+        
+        # Salva o ID da mensagem para poder editá-la depois
+        # Quando o código for utilizado, esta mensagem será atualizada
+        auth_data = read_json_file(AUTH_FILE)
+        if 'access_codes' in auth_data and access_code in auth_data['access_codes']:
+            auth_data['access_codes'][access_code]['message_id'] = reply_msg.message_id
+            write_json_file(AUTH_FILE, auth_data)
     except Exception as e:
         logger.error(f"Error generating access code: {e}")
         bot.reply_to(

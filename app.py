@@ -95,8 +95,11 @@ def login():
                 logger.info(f"Login successful for Telegram ID: {telegram_id}")
                 
                 flash('Login realizado com sucesso!', 'success')
+                # Corrigido o redirecionamento para evitar problemas com o parâmetro next
                 next_page = request.args.get('next')
-                return redirect(next_page or url_for('dashboard'))
+                if next_page and next_page.startswith('/') and not next_page.startswith('//'):
+                    return redirect(next_page)
+                return redirect(url_for('dashboard'))
             else:
                 # Log the unauthorized access attempt
                 logger.warning(f"Unauthorized access attempt from Telegram ID: {telegram_id}")

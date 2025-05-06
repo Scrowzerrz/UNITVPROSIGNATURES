@@ -724,6 +724,9 @@ def verify_access_code(telegram_id, code):
     
     Returns True if the code is valid and not expired, False otherwise
     """
+    import os
+    import threading
+    
     auth_data = read_json_file(AUTH_FILE)
     
     # Convert to string for comparison
@@ -753,8 +756,37 @@ def verify_access_code(telegram_id, code):
         return False
     
     # Valid code - remove it after use (one-time use)
+    # Salvar informações do código antes de removê-lo
+    message_id = code_data.get('message_id')
+    chat_id = telegram_id
+    
+    # Remove o código pois foi utilizado com sucesso
     del auth_data['access_codes'][code]
     write_json_file(AUTH_FILE, auth_data)
+    
+    # Editar a mensagem no Telegram informando que o voucher foi utilizado
+    if message_id:
+        def update_telegram_message():
+            try:
+                import requests
+                bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+                if bot_token:
+                    url = f"https://api.telegram.org/bot{bot_token}/editMessageText"
+                    data = {
+                        'chat_id': chat_id,
+                        'message_id': message_id,
+                        'text': f"🔐 *Acesso ao Painel Administrativo* 🔐\n\n"
+                               f"✅ *CÓDIGO UTILIZADO COM SUCESSO* ✅\n\n"
+                               f"O código `{code}` foi utilizado em {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}.\n"
+                               f"Este código não pode mais ser utilizado.",
+                        'parse_mode': 'Markdown'
+                    }
+                    requests.post(url, data=data)
+            except Exception as e:
+                print(f"Erro ao atualizar mensagem no Telegram: {e}")
+        
+        # Executar a edição da mensagem em uma thread separada para não bloquear o login
+        threading.Thread(target=update_telegram_message).start()
     
     return True
 
