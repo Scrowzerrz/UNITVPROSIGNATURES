@@ -1,7 +1,7 @@
 {
     "sales_enabled": false,
-    "warning_sent": true,
-    "sales_suspended_time": "2025-05-06T03:32:22.498448",
+    "warning_sent": false,
+    "sales_suspended_time": "2025-05-06T03:56:15.454839",
     "coupons": {},
     "referral_rewards": {
         "referrer_discount": 10,

@@ -16,14 +16,5 @@
             "first_name": "Admin",
             "username": "User6067681666"
         }
-    },
-    "988baade4930161a7d93902cf877aa713e257d908d1d1d5e4fe370adfee46d20": {
-        "telegram_id": "6067681666",
-        "created_at": "2025-05-06T03:46:05.044345",
-        "expires_at": "2025-05-07T03:46:05.044351",
-        "user_data": {
-            "first_name": "Admin",
-            "username": "User6067681666"
-        }
     }
 }
