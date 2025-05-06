@@ -347,7 +347,9 @@ def show_plans(call):
     # Add buttons for each plan
     for plan_id, plan in PLANS.items():
         # Criar callback_data com o ID exato como está no dicionário PLANS
-        callback_data = f"select_plan_{plan_id}"
+        # Não incluir underscores no ID do plano para evitar problemas de parsing
+        safe_plan_id = plan_id.replace("_", "-")
+        callback_data = f"select_plan_{safe_plan_id}"
         logger.info(f"Creating plan button with callback_data: {callback_data}")
         
         keyboard.add(
@@ -385,15 +387,19 @@ def select_plan(call):
         return
     
     # O ID do plano pode estar em diferentes formatos, verificar os possíveis
-    plan_id = parts[2]
+    # Restaurar os underscores usados nos IDs do plano (substituídos por hífens)
+    plan_param = parts[2]
     
-    # Se o plano tiver underscores adicionais, reconstruir corretamente
-    if len(parts) > 3 and parts[2] == "30" and parts[3] == "days":
+    # Converter o formato do callback para o formato usado no dicionário PLANS
+    if plan_param == "30-days":
         plan_id = "30_days"
-    elif len(parts) > 3 and parts[2] == "6" and parts[3] == "months":
+    elif plan_param == "6-months":
         plan_id = "6_months"
-    elif len(parts) > 3 and parts[2] == "1" and parts[3] == "year":
+    elif plan_param == "1-year":
         plan_id = "1_year"
+    else:
+        # Tentar fazer a conversão direta substituindo hífens por underscores
+        plan_id = plan_param.replace("-", "_")
         
     logger.info(f"Plan ID after parsing: {plan_id}")
     
@@ -439,15 +445,22 @@ def select_plan(call):
     logger.info(f"Creating coupon button with callback_data: use_coupon_{plan_id}_{price_str}")
     
     # Create keyboard
+    # Garantir que estamos usando o formato correto para o ID do plano nos callbacks
+    safe_plan_id = plan_id.replace("_", "-")
+    
+    # Log para verificar o formato dos dados
+    logger.info(f"Criando botões com plan_id: {plan_id}, safe_plan_id: {safe_plan_id}, price_str: {price_str}")
+    
+    # Criar teclado com os botões
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     keyboard.add(
-        types.InlineKeyboardButton("✅ Confirmar", callback_data=f"confirm_plan_{plan_id}_{price_str}"),
+        types.InlineKeyboardButton("✅ Confirmar", callback_data=f"confirm_plan_{safe_plan_id}_{price_str}"),
         types.InlineKeyboardButton("❌ Cancelar", callback_data="show_plans")
     )
     
     # Add coupon button
     keyboard.add(
-        types.InlineKeyboardButton("🎟️ Tenho um cupom", callback_data=f"use_coupon_{plan_id}_{price_str}")
+        types.InlineKeyboardButton("🎟️ Tenho um cupom", callback_data=f"use_coupon_{safe_plan_id}_{price_str}")
     )
     
     # Edit message
@@ -520,15 +533,25 @@ def process_coupon_code(message, plan_id, price):
     user_id = message.from_user.id
     coupon_code = message.text.strip()
     
+    # Garantir que o ID do plano está no formato correto
+    if plan_id.replace("-", "_") in PLANS:
+        # Se tiver hífen, converter para underscore
+        plan_id = plan_id.replace("-", "_")
+    
     # Validate coupon
     coupon_result, msg = validate_coupon(coupon_code, user_id, plan_id, price)
     
     if not coupon_result:
         # Invalid coupon
+        # Usar hífen em vez de underscore no plano para o callback
+        safe_plan_id = plan_id.replace("_", "-")
+        # Formatar preço para callback
+        price_str = str(price).replace('.', '_')
+        
         keyboard = types.InlineKeyboardMarkup(row_width=2)
         keyboard.add(
-            types.InlineKeyboardButton("🔙 Voltar", callback_data=f"select_plan_{plan_id}"),
-            types.InlineKeyboardButton("🎟️ Tentar outro cupom", callback_data=f"use_coupon_{plan_id}_{price}")
+            types.InlineKeyboardButton("🔙 Voltar", callback_data=f"select_plan_{safe_plan_id}"),
+            types.InlineKeyboardButton("🎟️ Tentar outro cupom", callback_data=f"use_coupon_{safe_plan_id}_{price_str}")
         )
         
         bot.send_message(
@@ -555,9 +578,13 @@ def process_coupon_code(message, plan_id, price):
     )
     
     # Create keyboard
+    # Usar formato seguro para o ID do plano
+    safe_plan_id = plan_id.replace("_", "-")
+    final_price_str = str(final_price).replace('.', '_')
+    
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     keyboard.add(
-        types.InlineKeyboardButton("✅ Confirmar", callback_data=f"confirm_plan_{plan_id}_{final_price}_{coupon_code}"),
+        types.InlineKeyboardButton("✅ Confirmar", callback_data=f"confirm_plan_{safe_plan_id}_{final_price_str}_{coupon_code}"),
         types.InlineKeyboardButton("❌ Cancelar", callback_data="show_plans")
     )
     
@@ -585,6 +612,20 @@ def confirm_plan(call):
         return
     
     plan_id = data_parts[2]
+    
+    # Converter hífens para underscores (formato aceito no dicionário PLANS)
+    if plan_id.replace("-", "_") in PLANS:
+        plan_id = plan_id.replace("-", "_")
+    
+    logger.info(f"Plan ID in confirm plan after parsing: {plan_id}")
+    
+    # Garantir que o plano existe
+    if plan_id not in PLANS:
+        valid_plans = list(PLANS.keys())
+        bot.answer_callback_query(call.id, f"Plano inválido! Planos válidos: {valid_plans}")
+        logger.error(f"Invalid plan ID: {plan_id}, available plans: {valid_plans}")
+        show_plans(call)
+        return
     
     # Convert string price back to float (format was like 20_00 for 20.00)
     try:
