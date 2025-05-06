@@ -28,7 +28,11 @@ def read_json_file(file_path):
             elif file_path == BOT_CONFIG_FILE:
                 return {'sales_enabled': True, 'warning_sent': False, 'sales_suspended_time': None, 'coupons': {}, 
                         'referral_rewards': {'referrer_discount': 10, 'referred_discount': 5, 'free_month_after_referrals': 3}}
-        
+            elif file_path == SESSION_FILE:
+                return {}
+            elif file_path == AUTH_FILE:
+                return {'admin_telegram_ids': [], 'allowed_telegram_ids': [], 'access_codes': {}}
+            
         with open(file_path, 'r', encoding='utf-8') as file:
             return json.load(file)
     except Exception as e:
@@ -41,6 +45,11 @@ def read_json_file(file_path):
         elif file_path == BOT_CONFIG_FILE:
             return {'sales_enabled': True, 'warning_sent': False, 'sales_suspended_time': None, 'coupons': {}, 
                     'referral_rewards': {'referrer_discount': 10, 'referred_discount': 5, 'free_month_after_referrals': 3}}
+        elif file_path == SESSION_FILE:
+            return {}
+        elif file_path == AUTH_FILE:
+            return {'admin_telegram_ids': [], 'allowed_telegram_ids': [], 'access_codes': {}}
+        return {}
 
 def write_json_file(file_path, data):
     try:
@@ -480,79 +489,191 @@ def remove_allowed_telegram_id(telegram_id):
 # Session Management Functions
 def create_session(telegram_id, user_data=None):
     """Create a new session for a user"""
-    session_token = secrets.token_hex(32)
-    sessions = read_json_file(SESSION_FILE)
-    
-    if not user_data:
-        # Verificar se o usuário existe, se não, criar dados básicos
-        user = get_user(telegram_id)
-        if user:
-            user_data = {
-                'first_name': user.get('first_name', 'Unknown'),
-                'username': user.get('username', 'Unknown')
-            }
-        else:
-            # Usuário não encontrado, usar dados básicos
+    try:
+        # Gerar token único
+        session_token = secrets.token_hex(32)
+        
+        # Ler sessões existentes ou inicializar
+        sessions = read_json_file(SESSION_FILE)
+        if sessions is None:
+            sessions = {}
+        
+        # Preparar dados do usuário
+        if not user_data:
+            # Verificar se o usuário existe, se não, criar dados básicos
+            user = get_user(telegram_id)
+            if user:
+                user_data = {
+                    'first_name': user.get('first_name', 'Admin'),
+                    'username': user.get('username', f'User{telegram_id}')
+                }
+            else:
+                # Usuário não encontrado, usar dados básicos
+                user_data = {
+                    'first_name': 'Admin',
+                    'username': f'User{telegram_id}'
+                }
+        
+        # Garantir que o user_data não seja None
+        if user_data is None:
             user_data = {
                 'first_name': 'Admin',
                 'username': f'User{telegram_id}'
             }
-    
-    # Create session
-    sessions[session_token] = {
-        'telegram_id': str(telegram_id),
-        'created_at': datetime.now().isoformat(),
-        'expires_at': (datetime.now() + timedelta(hours=SESSION_EXPIRY_HOURS)).isoformat(),
-        'user_data': user_data
-    }
-    
-    write_json_file(SESSION_FILE, sessions)
-    return session_token
+        
+        # Registrar o login
+        logger.debug(f"Creating session for telegram_id: {telegram_id}, with data: {user_data}")
+        
+        # Create session
+        sessions[session_token] = {
+            'telegram_id': str(telegram_id),
+            'created_at': datetime.now().isoformat(),
+            'expires_at': (datetime.now() + timedelta(hours=SESSION_EXPIRY_HOURS)).isoformat(),
+            'user_data': user_data
+        }
+        
+        # Salvar as sessões no arquivo
+        write_success = write_json_file(SESSION_FILE, sessions)
+        
+        if not write_success:
+            logger.error(f"Failed to write session file for telegram_id: {telegram_id}")
+            # Se falhar ao salvar, ainda retornamos o token para não interromper o login
+        
+        return session_token
+    except Exception as e:
+        logger.error(f"Error creating session for telegram_id {telegram_id}: {e}")
+        # Último recurso - retornar um token temporário para não interromper o login
+        return secrets.token_hex(32)
 
 def get_session(session_token):
     """Get a session by token"""
-    sessions = read_json_file(SESSION_FILE)
-    session = sessions.get(session_token)
-    
-    if not session:
+    try:
+        # Verificar se o token é válido
+        if not session_token:
+            logger.warning("Attempted to get session with empty token")
+            return None
+        
+        # Ler as sessões do arquivo
+        sessions = read_json_file(SESSION_FILE)
+        if sessions is None:
+            logger.error("Sessions file returned None")
+            return None
+            
+        # Verificar se o token existe nas sessões
+        session = sessions.get(session_token)
+        if not session:
+            logger.warning(f"Session token not found: {session_token[:8]}...")
+            return None
+        
+        # Verificar se a sessão tem o campo obrigatório expires_at
+        if 'expires_at' not in session:
+            logger.error(f"Session missing expires_at field: {session_token[:8]}...")
+            return None
+        
+        # Verificar se a sessão expirou
+        try:
+            expires_at = datetime.fromisoformat(session['expires_at'])
+            if datetime.now() > expires_at:
+                logger.info(f"Session expired: {session_token[:8]}...")
+                delete_session(session_token)
+                return None
+        except ValueError as e:
+            logger.error(f"Invalid date format in session: {e}")
+            return None
+        
+        # Se chegou até aqui, a sessão é válida
+        return session
+    except Exception as e:
+        logger.error(f"Error in get_session: {e}")
         return None
-    
-    # Check if session is expired
-    expires_at = datetime.fromisoformat(session['expires_at'])
-    if datetime.now() > expires_at:
-        delete_session(session_token)
-        return None
-    
-    return session
 
 def delete_session(session_token):
     """Delete a session"""
-    sessions = read_json_file(SESSION_FILE)
-    if session_token in sessions:
-        del sessions[session_token]
-        write_json_file(SESSION_FILE, sessions)
-        return True
-    
-    return False
+    try:
+        # Verificar se o token é válido
+        if not session_token:
+            logger.warning("Attempted to delete session with empty token")
+            return False
+            
+        # Ler as sessões do arquivo
+        sessions = read_json_file(SESSION_FILE)
+        if sessions is None:
+            logger.error("Sessions file returned None when trying to delete session")
+            return False
+        
+        # Verificar se o token existe nas sessões
+        if session_token in sessions:
+            # Registrar a exclusão
+            logger.debug(f"Deleting session: {session_token[:8]}...")
+            
+            # Remover a sessão
+            del sessions[session_token]
+            
+            # Salvar o arquivo de sessões atualizado
+            write_success = write_json_file(SESSION_FILE, sessions)
+            if not write_success:
+                logger.error(f"Failed to write sessions file when deleting token: {session_token[:8]}...")
+                return False
+            
+            return True
+        else:
+            logger.warning(f"Session token not found for deletion: {session_token[:8]}...")
+            return False
+    except Exception as e:
+        logger.error(f"Error in delete_session: {e}")
+        return False
 
 def clean_expired_sessions():
     """Remove all expired sessions"""
-    sessions = read_json_file(SESSION_FILE)
-    now = datetime.now()
-    
-    session_tokens_to_delete = []
-    for token, session in sessions.items():
-        expires_at = datetime.fromisoformat(session['expires_at'])
-        if now > expires_at:
-            session_tokens_to_delete.append(token)
-    
-    for token in session_tokens_to_delete:
-        del sessions[token]
-    
-    if session_tokens_to_delete:
-        write_json_file(SESSION_FILE, sessions)
-    
-    return len(session_tokens_to_delete)
+    try:
+        # Ler as sessões do arquivo
+        sessions = read_json_file(SESSION_FILE)
+        if sessions is None or not sessions:
+            logger.warning("No sessions found to clean")
+            return 0
+        
+        now = datetime.now()
+        session_tokens_to_delete = []
+        
+        # Identificar sessões expiradas
+        for token, session in sessions.items():
+            try:
+                if 'expires_at' in session:
+                    expires_at = datetime.fromisoformat(session['expires_at'])
+                    if now > expires_at:
+                        session_tokens_to_delete.append(token)
+                        logger.debug(f"Marked expired session for deletion: {token[:8]}...")
+                else:
+                    # Sessão sem data de expiração está inválida
+                    session_tokens_to_delete.append(token)
+                    logger.warning(f"Session without expiration date marked for deletion: {token[:8]}...")
+            except (ValueError, TypeError) as e:
+                # Erro ao processar a data de expiração
+                session_tokens_to_delete.append(token)
+                logger.error(f"Error processing expiration date for session {token[:8]}...: {e}")
+        
+        # Remover as sessões expiradas
+        for token in session_tokens_to_delete:
+            try:
+                del sessions[token]
+            except KeyError:
+                logger.error(f"Failed to delete session {token[:8]}...")
+        
+        # Salvar as alterações se houve remoção de sessões
+        if session_tokens_to_delete:
+            write_success = write_json_file(SESSION_FILE, sessions)
+            if not write_success:
+                logger.error("Failed to write sessions file after cleaning expired sessions")
+        
+        # Registrar o número de sessões removidas
+        cleaned_count = len(session_tokens_to_delete)
+        if cleaned_count > 0:
+            logger.info(f"Cleaned {cleaned_count} expired sessions")
+        
+        return cleaned_count
+    except Exception as e:
+        logger.error(f"Error in clean_expired_sessions: {e}")
+        return 0
 
 # Authentication token functions
 def create_auth_token(telegram_id):
