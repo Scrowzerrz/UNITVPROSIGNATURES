@@ -276,11 +276,101 @@ def user_detail(user_id):
         if user_payments:
             user_payments.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
-        return render_template('users.html', user=user, user_id=user_id, payments=user_payments)
+        # Obter descontos sazonais ativos
+        seasonal_discounts = get_active_seasonal_discounts()
+        
+        return render_template('users.html', user=user, user_id=user_id, payments=user_payments,
+                               seasonal_discounts=seasonal_discounts, plans=PLANS)
     except Exception as e:
         log_exception(e)
         flash('Erro ao carregar detalhes do usuário. Tente novamente.', 'danger')
         return redirect(url_for('users'))
+        
+@app.route('/users/<user_id>/assign-plan', methods=['POST'])
+@login_required
+def assign_plan(user_id):
+    try:
+        # Obter dados do formulário
+        plan_type = request.form.get('plan_type')
+        duration_days = request.form.get('duration_days')
+        
+        # Validar o tipo de plano
+        if plan_type not in PLANS:
+            flash('Tipo de plano inválido.', 'danger')
+            return redirect(url_for('user_detail', user_id=user_id))
+        
+        # Converter duração para inteiro se fornecida
+        if duration_days:
+            try:
+                duration_days = int(duration_days)
+            except ValueError:
+                flash('Duração do plano inválida.', 'danger')
+                return redirect(url_for('user_detail', user_id=user_id))
+        else:
+            duration_days = None
+        
+        # Atribuir plano ao usuário
+        if assign_plan_to_user(user_id, plan_type, duration_days):
+            flash(f'Plano atribuído com sucesso ao usuário.', 'success')
+        else:
+            flash('Erro ao atribuir plano ao usuário.', 'danger')
+        
+        return redirect(url_for('user_detail', user_id=user_id))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao atribuir plano ao usuário. Tente novamente.', 'danger')
+        return redirect(url_for('user_detail', user_id=user_id))
+        
+@app.route('/users/<user_id>/remove-plan', methods=['POST'])
+@login_required
+def remove_plan(user_id):
+    try:
+        # Remover plano do usuário
+        if remove_plan_from_user(user_id):
+            flash('Plano removido com sucesso do usuário.', 'success')
+        else:
+            flash('Erro ao remover plano do usuário.', 'danger')
+        
+        return redirect(url_for('user_detail', user_id=user_id))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao remover plano do usuário. Tente novamente.', 'danger')
+        return redirect(url_for('user_detail', user_id=user_id))
+        
+@app.route('/users/<user_id>/ban', methods=['POST'])
+@login_required
+def ban_user_route(user_id):
+    try:
+        # Obter motivo do banimento
+        reason = request.form.get('ban_reason', '')
+        
+        # Banir usuário
+        if ban_user(user_id, reason):
+            flash('Usuário banido com sucesso.', 'success')
+        else:
+            flash('Erro ao banir usuário.', 'danger')
+        
+        return redirect(url_for('user_detail', user_id=user_id))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao banir usuário. Tente novamente.', 'danger')
+        return redirect(url_for('user_detail', user_id=user_id))
+        
+@app.route('/users/<user_id>/unban', methods=['POST'])
+@login_required
+def unban_user_route(user_id):
+    try:
+        # Desbanir usuário
+        if unban_user(user_id):
+            flash('Usuário desbanido com sucesso.', 'success')
+        else:
+            flash('Erro ao desbanir usuário.', 'danger')
+        
+        return redirect(url_for('user_detail', user_id=user_id))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao desbanir usuário. Tente novamente.', 'danger')
+        return redirect(url_for('user_detail', user_id=user_id))
 
 @app.route('/payments')
 @login_required
@@ -473,7 +563,83 @@ def coupons():
         else:
             coupon['uses_formatted'] = f"{coupon['uses']} / {coupon['max_uses']}"
     
-    return render_template('coupons.html', coupons=coupons_data, plans=PLANS)
+    # Obter descontos sazonais ativos
+    seasonal_discounts = get_active_seasonal_discounts()
+    
+    # Formatar dados dos descontos sazonais para exibição
+    for discount_id, discount in seasonal_discounts.items():
+        expiration_date = datetime.fromisoformat(discount['expiration_date'])
+        discount['expiration_formatted'] = expiration_date.strftime('%d/%m/%Y')
+        discount['days_left'] = (expiration_date - datetime.now()).days
+        
+        # Formatar lista de planos aplicáveis
+        plan_names = []
+        for plan_type in discount['applicable_plans']:
+            if plan_type in PLANS:
+                plan_names.append(PLANS[plan_type]['name'])
+        
+        discount['plans_formatted'] = ', '.join(plan_names) if plan_names else 'All Plans'
+    
+    return render_template('coupons.html', coupons=coupons_data, plans=PLANS, 
+                          seasonal_discounts=seasonal_discounts)
+                          
+@app.route('/seasonal-discounts/add', methods=['POST'])
+@login_required
+def add_seasonal_discount_route():
+    try:
+        # Obter dados do formulário
+        discount_percent = request.form.get('discount_percent')
+        expiration_days = request.form.get('expiration_days')
+        applicable_plans = request.form.getlist('applicable_plans')
+        
+        # Validar dados
+        try:
+            discount_percent = int(discount_percent)
+            expiration_days = int(expiration_days)
+        except (ValueError, TypeError):
+            flash('Valores inválidos para desconto ou dias de expiração.', 'danger')
+            return redirect(url_for('coupons'))
+            
+        if discount_percent <= 0 or discount_percent > 100:
+            flash('Percentual de desconto deve estar entre 1 e 100.', 'danger')
+            return redirect(url_for('coupons'))
+            
+        if expiration_days <= 0:
+            flash('Dias de expiração deve ser um número positivo.', 'danger')
+            return redirect(url_for('coupons'))
+        
+        # Validar planos aplicáveis
+        valid_plans = applicable_plans if applicable_plans else None
+        
+        # Adicionar desconto sazonal
+        discount_id = add_seasonal_discount(discount_percent, expiration_days, valid_plans)
+        
+        if discount_id:
+            flash('Desconto sazonal adicionado com sucesso.', 'success')
+        else:
+            flash('Erro ao adicionar desconto sazonal.', 'danger')
+        
+        return redirect(url_for('coupons'))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao adicionar desconto sazonal. Tente novamente.', 'danger')
+        return redirect(url_for('coupons'))
+        
+@app.route('/seasonal-discounts/remove/<discount_id>', methods=['POST'])
+@login_required
+def remove_seasonal_discount_route(discount_id):
+    try:
+        # Remover desconto sazonal
+        if remove_seasonal_discount(discount_id):
+            flash('Desconto sazonal removido com sucesso.', 'success')
+        else:
+            flash('Erro ao remover desconto sazonal.', 'danger')
+        
+        return redirect(url_for('coupons'))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao remover desconto sazonal. Tente novamente.', 'danger')
+        return redirect(url_for('coupons'))
 
 @app.route('/coupons/add', methods=['POST'])
 @login_required

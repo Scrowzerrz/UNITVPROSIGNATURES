@@ -70,6 +70,242 @@ def save_user(user_id, user_data):
     users = read_json_file(USERS_FILE)
     users[str(user_id)] = user_data
     write_json_file(USERS_FILE, users)
+    
+def assign_plan_to_user(user_id, plan_type, duration_days=None):
+    """
+    Atribui um plano a um usuário manualmente.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        plan_type (str): Tipo de plano ('30_days', '6_months', '1_year')
+        duration_days (int, optional): Duração personalizada em dias. Se None, usa a duração padrão do plano.
+    
+    Returns:
+        bool: True se o plano foi atribuído com sucesso, False caso contrário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            return False
+        
+        # Determinar a duração do plano
+        if duration_days is None:
+            duration_days = PLANS[plan_type]['duration_days']
+        
+        # Atualizar os dados do usuário
+        user['has_active_plan'] = True
+        user['plan_type'] = plan_type
+        
+        # Calcular a data de expiração
+        expiration_date = datetime.now() + timedelta(days=duration_days)
+        user['plan_expiration'] = expiration_date.isoformat()
+        
+        # Resetar a notificação de expiração
+        user['expiration_notified'] = False
+        
+        # Salvar as alterações
+        save_user(user_id, user)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error assigning plan to user {user_id}: {e}")
+        return False
+
+def remove_plan_from_user(user_id):
+    """
+    Remove o plano atual de um usuário.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+    
+    Returns:
+        bool: True se o plano foi removido com sucesso, False caso contrário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            return False
+        
+        # Remover dados do plano
+        user['has_active_plan'] = False
+        user['plan_type'] = None
+        user['plan_expiration'] = None
+        user['login_info'] = None
+        
+        # Salvar as alterações
+        save_user(user_id, user)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error removing plan from user {user_id}: {e}")
+        return False
+
+def ban_user(user_id, reason=None):
+    """
+    Bane um usuário, impedindo-o de usar o bot.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        reason (str, optional): Motivo do banimento
+    
+    Returns:
+        bool: True se o usuário foi banido com sucesso, False caso contrário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            return False
+        
+        # Marcar usuário como banido
+        user['is_banned'] = True
+        user['ban_reason'] = reason
+        user['banned_at'] = datetime.now().isoformat()
+        
+        # Remover plano atual se existir
+        user['has_active_plan'] = False
+        user['plan_type'] = None
+        user['plan_expiration'] = None
+        user['login_info'] = None
+        
+        # Salvar as alterações
+        save_user(user_id, user)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error banning user {user_id}: {e}")
+        return False
+
+def unban_user(user_id):
+    """
+    Remove o banimento de um usuário.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+    
+    Returns:
+        bool: True se o usuário foi desbanido com sucesso, False caso contrário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            return False
+        
+        # Remover banimento
+        user['is_banned'] = False
+        user['ban_reason'] = None
+        user['unbanned_at'] = datetime.now().isoformat()
+        
+        # Salvar as alterações
+        save_user(user_id, user)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error unbanning user {user_id}: {e}")
+        return False
+        
+def add_seasonal_discount(discount_percent, expiration_days, applicable_plans=None):
+    """
+    Adiciona um desconto sazonal para todos os usuários.
+    
+    Args:
+        discount_percent (int): Percentual de desconto (1-100)
+        expiration_days (int): Dias até a expiração do desconto
+        applicable_plans (list, optional): Lista de planos aos quais o desconto se aplica. 
+                                         Se None, aplica a todos os planos.
+    
+    Returns:
+        str: ID do desconto criado
+    """
+    try:
+        discount_id = str(uuid.uuid4())
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        
+        # Inicializar a seção de descontos se não existir
+        if 'seasonal_discounts' not in bot_config:
+            bot_config['seasonal_discounts'] = {}
+            
+        # Calcular a data de expiração
+        expiration_date = datetime.now() + timedelta(days=expiration_days)
+        
+        # Definir os planos aplicáveis
+        if applicable_plans is None:
+            applicable_plans = list(PLANS.keys())
+            
+        # Criar o desconto
+        bot_config['seasonal_discounts'][discount_id] = {
+            'discount_percent': discount_percent,
+            'expiration_date': expiration_date.isoformat(),
+            'applicable_plans': applicable_plans,
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Salvar as alterações
+        write_json_file(BOT_CONFIG_FILE, bot_config)
+        
+        return discount_id
+    except Exception as e:
+        logger.error(f"Error adding seasonal discount: {e}")
+        return None
+        
+def remove_seasonal_discount(discount_id):
+    """
+    Remove um desconto sazonal.
+    
+    Args:
+        discount_id (str): ID do desconto a ser removido
+    
+    Returns:
+        bool: True se o desconto foi removido com sucesso, False caso contrário
+    """
+    try:
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        
+        # Verificar se a seção de descontos existe
+        if 'seasonal_discounts' not in bot_config:
+            return False
+            
+        # Verificar se o desconto existe
+        if discount_id not in bot_config['seasonal_discounts']:
+            return False
+            
+        # Remover o desconto
+        del bot_config['seasonal_discounts'][discount_id]
+        
+        # Salvar as alterações
+        write_json_file(BOT_CONFIG_FILE, bot_config)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error removing seasonal discount: {e}")
+        return False
+
+def get_active_seasonal_discounts():
+    """
+    Retorna todos os descontos sazonais ativos.
+    
+    Returns:
+        dict: Dicionário com os descontos ativos
+    """
+    try:
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        
+        # Verificar se a seção de descontos existe
+        if 'seasonal_discounts' not in bot_config:
+            return {}
+            
+        active_discounts = {}
+        current_time = datetime.now()
+        
+        # Filtrar descontos ativos
+        for discount_id, discount_data in bot_config['seasonal_discounts'].items():
+            expiration_date = datetime.fromisoformat(discount_data['expiration_date'])
+            if current_time < expiration_date:
+                active_discounts[discount_id] = discount_data
+                
+        return active_discounts
+    except Exception as e:
+        logger.error(f"Error getting active seasonal discounts: {e}")
+        return {}
 
 def create_user(user_id, username, first_name, last_name=None, referred_by=None):
     user_data = {
