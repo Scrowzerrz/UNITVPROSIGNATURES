@@ -835,6 +835,10 @@ def pay_with_pix_manual(call):
     payment_id = call.data.split("_")[3]
     send_pix_instructions(call, payment_id)
 
+import requests
+import json
+import uuid
+
 # Handler for PIX via Mercado Pago payment method selection
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pay_pix_mp_"))
 def pay_with_pix_mercado_pago(call):
@@ -860,36 +864,151 @@ def pay_with_pix_mercado_pago(call):
         send_pix_instructions(call, payment_id)
         return
     
-    # Create message with QR Code instructions
-    mp_msg = (
-        f"📱 *PIX com QR Code via Mercado Pago* 📱\n\n"
-        f"Plano: {PLANS[plan_id]['name']}\n"
-        f"Valor: {format_currency(amount)}\n\n"
-        f"Para pagar com QR Code, clique no botão abaixo. Você será redirecionado para uma página do Mercado Pago.\n\n"
-        f"Na página, você poderá escanear o QR Code PIX com seu aplicativo bancário.\n\n"
-        f"*O pagamento será confirmado automaticamente* assim que for processado."
-    )
-    
-    # Create keyboard with payment URL and buttons
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-    
-    # Adicionar botão para link de pagamento - Em uma implementação real, isto geraria
-    # um link de pagamento usando a API do Mercado Pago
-    payment_text = f"Abrir QR Code PIX"
-    keyboard.add(
-        types.InlineKeyboardButton(text=payment_text, url="https://www.mercadopago.com.br"),
-        types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}"),
-        types.InlineKeyboardButton("↩️ Voltar para PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
-    )
-    
-    # Edit message
-    bot.edit_message_text(
-        mp_msg,
+    # Mostrar mensagem temporária enquanto processa
+    temp_msg = bot.edit_message_text(
+        "⏳ *Gerando QR Code PIX...* ⏳\n\nPor favor, aguarde um momento.",
         call.message.chat.id,
         call.message.message_id,
-        reply_markup=keyboard,
         parse_mode="Markdown"
     )
+    
+    try:
+        # Obter o token de acesso do Mercado Pago
+        access_token = mp_settings.get('access_token')
+        
+        # Preparar dados do pagamento
+        payment_data = {
+            "transaction_amount": float(amount),
+            "description": f"UniTV - {PLANS[plan_id]['name']} - ID: {payment_id}",
+            "payment_method_id": "pix",
+            "payer": {
+                "email": f"cliente_{call.from_user.id}@unitv.com",
+                "first_name": call.from_user.first_name or "Cliente",
+                "last_name": call.from_user.last_name or "UniTV",
+                "identification": {
+                    "type": "CPF",
+                    "number": "00000000000"  # CPF fictício, em produção usar CPF real
+                }
+            },
+            "notification_url": f"https://webhook.site/{uuid.uuid4()}"  # Em produção, usar URL real
+        }
+        
+        # Configurar headers
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Fazer requisição à API do Mercado Pago
+        response = requests.post(
+            "https://api.mercadopago.com/v1/payments",
+            data=json.dumps(payment_data),
+            headers=headers
+        )
+        
+        # Verificar resposta
+        if response.status_code == 201:
+            # Pagamento criado com sucesso
+            mp_response = response.json()
+            logger.info(f"Mercado Pago payment created: {mp_response['id']}")
+            
+            # Salvar o ID do pagamento MP no nosso pagamento
+            update_payment(payment_id, {'mp_payment_id': mp_response['id']})
+            
+            # Obter os dados do PIX
+            pix_data = mp_response.get('point_of_interaction', {}).get('transaction_data', {})
+            qr_code_base64 = pix_data.get('qr_code_base64', '')
+            qr_code = pix_data.get('qr_code', '')
+            
+            # Criar a mensagem com as instruções
+            mp_msg = (
+                f"📱 *PIX com QR Code via Mercado Pago* 📱\n\n"
+                f"Plano: {PLANS[plan_id]['name']}\n"
+                f"Valor: {format_currency(amount)}\n\n"
+                f"*Instruções:*\n"
+                f"1. Copie o código PIX abaixo ou use o botão para abrir o QR Code\n"
+                f"2. Abra o aplicativo do seu banco\n"
+                f"3. Escolha PIX > Pagar com PIX > Copia e Cola\n"
+                f"4. Cole o código e confirme o pagamento\n\n"
+                f"*Código PIX (Copia e Cola):*\n`{qr_code}`\n\n"
+                f"*O pagamento será confirmado automaticamente* assim que for processado."
+            )
+            
+            # Criar o teclado
+            keyboard = types.InlineKeyboardMarkup(row_width=1)
+            
+            # Adicionar botão para ver o QR Code
+            if 'qr_code_url' in pix_data:
+                qr_url = pix_data['qr_code_url']
+                keyboard.add(
+                    types.InlineKeyboardButton(text="📱 Ver QR Code PIX", url=qr_url)
+                )
+            
+            # Adicionar outros botões
+            keyboard.add(
+                types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}"),
+                types.InlineKeyboardButton("↩️ Voltar para PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
+            )
+            
+            # Enviar QR code como imagem (se disponível)
+            if qr_code_base64:
+                try:
+                    import base64
+                    from io import BytesIO
+                    
+                    # Decodificar a imagem base64
+                    qr_image = BytesIO(base64.b64decode(qr_code_base64))
+                    
+                    # Enviar a imagem
+                    bot.send_photo(
+                        call.message.chat.id,
+                        qr_image,
+                        caption=f"QR Code PIX para pagamento de {PLANS[plan_id]['name']} - {format_currency(amount)}"
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending QR code image: {e}")
+            
+            # Editar mensagem com instruções
+            bot.edit_message_text(
+                mp_msg,
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            
+        else:
+            # Erro ao criar pagamento no Mercado Pago
+            error_msg = response.json().get('message', 'Erro desconhecido')
+            logger.error(f"Mercado Pago payment error: {error_msg}")
+            
+            bot.edit_message_text(
+                f"❌ *Erro ao gerar QR Code PIX* ❌\n\n"
+                f"Não foi possível gerar o pagamento via Mercado Pago.\n"
+                f"Por favor, tente pagar usando o PIX Manual.",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton("↩️ Usar PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
+                ),
+                parse_mode="Markdown"
+            )
+    
+    except Exception as e:
+        # Tratar qualquer erro durante o processo
+        logger.error(f"Error creating Mercado Pago payment: {e}")
+        
+        bot.edit_message_text(
+            f"❌ *Erro ao gerar QR Code PIX* ❌\n\n"
+            f"Ocorreu um erro ao processar seu pagamento via Mercado Pago.\n"
+            f"Por favor, tente pagar usando o PIX Manual.",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("↩️ Usar PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
+            ),
+            parse_mode="Markdown"
+        )
 
 # Legacy handler for compatibility - redirect to manual PIX
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pay_pix_") and not call.data.startswith("pay_pix_manual_") and not call.data.startswith("pay_pix_mp_"))
