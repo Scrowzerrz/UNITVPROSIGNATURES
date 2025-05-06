@@ -51,9 +51,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('payment_settings') }}">
-                                <i class="fas fa-cog me-2"></i> Config. de Pagamento
-                            </a>
+                            <form action="{{ url_for('payment_settings') }}" method="GET" class="m-0 p-0">
+                                <button type="submit" class="nav-link w-100 text-start border-0 bg-transparent">
+                                    <i class="fas fa-cog me-2"></i> Config. de Pagamento
+                                </button>
+                            </form>
                         </li>
                         <li class="nav-item mt-5">
                             <a class="nav-link text-danger" href="{{ url_for('logout') }}">
@@ -287,9 +289,11 @@
                                         </a>
                                     </div>
                                     <div class="col-md-3 mb-3">
-                                        <a href="{{ url_for('payment_settings') }}" class="btn btn-danger btn-block w-100 py-3">
-                                            <i class="fas fa-cog me-2"></i> Config. Pagamento
-                                        </a>
+                                        <form action="{{ url_for('payment_settings') }}" method="GET">
+                                            <button type="submit" class="btn btn-danger btn-block w-100 py-3">
+                                                <i class="fas fa-cog me-2"></i> Config. Pagamento
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
                             </div>

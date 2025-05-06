@@ -39,8 +39,13 @@ app.secret_key = os.environ.get("SESSION_SECRET", "unitv_secret_key")
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Debug session info
+        logger.debug(f"Session in login_required: {session}")
+        
         # Check if user is logged in
         if 'logged_in' not in session:
+            logger.warning(f"User not logged in, redirecting to login from {request.path}")
+            flash('Por favor, faça login para acessar esta página.', 'warning')
             return redirect(url_for('login', next=request.url))
         
         # Verify session token if available
@@ -48,6 +53,7 @@ def login_required(f):
             session_data = get_session(session['session_token'])
             if not session_data:
                 # Session expired or invalid, clear session and redirect to login
+                logger.warning(f"Invalid session token: {session['session_token'][:8]}...")
                 session.clear()
                 flash('Sua sessão expirou. Por favor, faça login novamente.', 'warning')
                 return redirect(url_for('login', next=request.url))
@@ -56,12 +62,17 @@ def login_required(f):
             telegram_id = session.get('telegram_id')
             if telegram_id and not is_allowed_telegram_id(telegram_id):
                 # User no longer has permission
+                logger.warning(f"User {telegram_id} no longer has permission")
                 delete_session(session['session_token'])
                 session.clear()
                 flash('Você não tem mais permissão para acessar o painel administrativo.', 'danger')
                 return redirect(url_for('login'))
+                
+            # Session is valid, continue
+            logger.debug(f"Valid session for user {telegram_id}")
         else:
             # No session token found but logged_in is True (old session)
+            logger.warning("No session token found but logged_in is True")
             session.clear()
             flash('Sessão inválida. Por favor, faça login novamente.', 'warning')
             return redirect(url_for('login', next=request.url))
@@ -535,24 +546,31 @@ def delete_coupon_route(code):
 def payment_settings():
     """Payment settings page with PIX and Mercado Pago configuration"""
     try:
+        # Log debug information about the session
+        logger.debug(f"Session in payment_settings: {session}")
+        
         # Get payment settings from bot_config
         bot_config = read_json_file(BOT_CONFIG_FILE)
         payment_settings = bot_config.get('payment_settings', {})
         
-        # Get PIX settings
-        pix_settings = payment_settings.get('pix', {
-            'enabled': True,
-            'key': 'nossaempresa@email.com',
-            'name': 'Empresa UniTV LTDA',
-            'bank': 'Banco UniTV'
-        })
+        # Get PIX settings or set default values if they don't exist
+        pix_settings = payment_settings.get('pix', {})
+        if not pix_settings:
+            pix_settings = {
+                'enabled': True,
+                'key': 'nossaempresa@email.com',
+                'name': 'Empresa UniTV LTDA',
+                'bank': 'Banco UniTV'
+            }
         
-        # Get Mercado Pago settings
-        mercado_pago_settings = payment_settings.get('mercado_pago', {
-            'enabled': False,
-            'access_token': '',
-            'public_key': ''
-        })
+        # Get Mercado Pago settings or set default values if they don't exist
+        mercado_pago_settings = payment_settings.get('mercado_pago', {})
+        if not mercado_pago_settings:
+            mercado_pago_settings = {
+                'enabled': False,
+                'access_token': '',
+                'public_key': ''
+            }
         
         # Get data for stats (required by dashboard.html template)
         users = read_json_file(USERS_FILE) or {}
@@ -577,7 +595,7 @@ def payment_settings():
         }
         
         # Log debug information
-        logger.debug(f"Payment settings loaded successfully: PIX: {pix_settings['enabled']}, MP: {mercado_pago_settings['enabled']}")
+        logger.debug(f"Payment settings loaded successfully: PIX: {pix_settings.get('enabled')}, MP: {mercado_pago_settings.get('enabled')}")
         
         return render_template('payment_settings.html', 
                               pix=pix_settings, 
