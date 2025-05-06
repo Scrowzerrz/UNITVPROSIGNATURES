@@ -1,0 +1,11 @@
+{
+    "sales_enabled": true,
+    "warning_sent": false,
+    "sales_suspended_time": null,
+    "coupons": {},
+    "referral_rewards": {
+        "referrer_discount": 10,
+        "referred_discount": 5,
+        "free_month_after_referrals": 3
+    }
+}

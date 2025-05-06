@@ -1,0 +1,437 @@
+import json
+import uuid
+import time
+import logging
+import os
+from datetime import datetime, timedelta
+from config import (
+    USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE,
+    PLANS, ADMIN_ID
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Utility functions for file operations
+def read_json_file(file_path):
+    try:
+        if not os.path.exists(file_path):
+            if file_path == USERS_FILE:
+                return {}
+            elif file_path == PAYMENTS_FILE:
+                return {}
+            elif file_path == LOGINS_FILE:
+                return {'30_days': [], '6_months': [], '1_year': []}
+            elif file_path == BOT_CONFIG_FILE:
+                return {'sales_enabled': True, 'warning_sent': False, 'sales_suspended_time': None, 'coupons': {}, 
+                        'referral_rewards': {'referrer_discount': 10, 'referred_discount': 5, 'free_month_after_referrals': 3}}
+        
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except Exception as e:
+        logger.error(f"Error reading file {file_path}: {e}")
+        # Return empty default based on file type
+        if file_path == USERS_FILE or file_path == PAYMENTS_FILE:
+            return {}
+        elif file_path == LOGINS_FILE:
+            return {'30_days': [], '6_months': [], '1_year': []}
+        elif file_path == BOT_CONFIG_FILE:
+            return {'sales_enabled': True, 'warning_sent': False, 'sales_suspended_time': None, 'coupons': {}, 
+                    'referral_rewards': {'referrer_discount': 10, 'referred_discount': 5, 'free_month_after_referrals': 3}}
+
+def write_json_file(file_path, data):
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, 'w', encoding='utf-8') as file:
+            json.dump(data, file, indent=4, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Error writing to file {file_path}: {e}")
+        return False
+
+# User management functions
+def get_user(user_id):
+    users = read_json_file(USERS_FILE)
+    return users.get(str(user_id))
+
+def save_user(user_id, user_data):
+    users = read_json_file(USERS_FILE)
+    users[str(user_id)] = user_data
+    write_json_file(USERS_FILE, users)
+
+def create_user(user_id, username, first_name, last_name=None, referred_by=None):
+    user_data = {
+        'username': username,
+        'first_name': first_name,
+        'last_name': last_name,
+        'created_at': datetime.now().isoformat(),
+        'has_active_plan': False,
+        'plan_type': None,
+        'plan_expiration': None,
+        'login_info': None,
+        'is_first_buy': True,
+        'referrals': [],
+        'referred_by': referred_by,
+        'successful_referrals': 0
+    }
+    save_user(user_id, user_data)
+    return user_data
+
+# Payment management functions
+def create_payment(user_id, plan_type, amount, coupon_code=None):
+    payment_id = str(uuid.uuid4())
+    payments = read_json_file(PAYMENTS_FILE)
+    
+    payment_data = {
+        'payment_id': payment_id,
+        'user_id': str(user_id),
+        'plan_type': plan_type,
+        'amount': amount,
+        'original_amount': amount,
+        'coupon_code': coupon_code,
+        'status': 'pending',
+        'created_at': datetime.now().isoformat(),
+        'approved_at': None,
+        'payer_name': '',
+        'login_delivered': False
+    }
+    
+    payments[payment_id] = payment_data
+    write_json_file(PAYMENTS_FILE, payments)
+    return payment_id
+
+def get_payment(payment_id):
+    payments = read_json_file(PAYMENTS_FILE)
+    return payments.get(payment_id)
+
+def update_payment(payment_id, data):
+    payments = read_json_file(PAYMENTS_FILE)
+    if payment_id in payments:
+        payments[payment_id].update(data)
+        write_json_file(PAYMENTS_FILE, payments)
+        return True
+    return False
+
+def get_user_pending_payment(user_id):
+    payments = read_json_file(PAYMENTS_FILE)
+    for payment_id, payment in payments.items():
+        if payment['user_id'] == str(user_id) and payment['status'] == 'pending':
+            return payment
+    return None
+
+def cancel_payment(payment_id):
+    payments = read_json_file(PAYMENTS_FILE)
+    if payment_id in payments:
+        payments[payment_id]['status'] = 'cancelled'
+        write_json_file(PAYMENTS_FILE, payments)
+        return True
+    return False
+
+# Login management functions
+def add_login(plan_type, login_data):
+    logins = read_json_file(LOGINS_FILE)
+    if plan_type in logins:
+        logins[plan_type].append(login_data)
+        write_json_file(LOGINS_FILE, logins)
+        return True
+    return False
+
+def get_available_login(plan_type):
+    logins = read_json_file(LOGINS_FILE)
+    if plan_type in logins and logins[plan_type]:
+        return logins[plan_type][0]
+    return None
+
+def remove_login(plan_type, login_data):
+    logins = read_json_file(LOGINS_FILE)
+    if plan_type in logins and login_data in logins[plan_type]:
+        logins[plan_type].remove(login_data)
+        write_json_file(LOGINS_FILE, logins)
+        return True
+    return False
+
+def assign_login_to_user(user_id, plan_type, payment_id):
+    user = get_user(user_id)
+    login = get_available_login(plan_type)
+    
+    if not user:
+        logger.error(f"User {user_id} not found")
+        return False
+    
+    if not login:
+        logger.error(f"No available login for plan type {plan_type}")
+        return False
+    
+    # Update user with the login and plan information
+    plan_info = PLANS[plan_type]
+    expiration_date = datetime.now() + timedelta(days=plan_info['duration_days'])
+    
+    user['has_active_plan'] = True
+    user['plan_type'] = plan_type
+    user['plan_expiration'] = expiration_date.isoformat()
+    user['login_info'] = login
+    user['is_first_buy'] = False
+    
+    save_user(user_id, user)
+    
+    # Update payment status
+    update_payment(payment_id, {
+        'status': 'completed',
+        'approved_at': datetime.now().isoformat(),
+        'login_delivered': True
+    })
+    
+    # Remove the login from available logins
+    remove_login(plan_type, login)
+    
+    # Process referral if applicable
+    if user['referred_by']:
+        process_successful_referral(user['referred_by'])
+    
+    return login
+
+def process_successful_referral(referrer_id):
+    referrer = get_user(referrer_id)
+    if referrer:
+        referrer['successful_referrals'] = referrer.get('successful_referrals', 0) + 1
+        save_user(referrer_id, referrer)
+        
+        # Check if referrer qualifies for free month
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        required_referrals = bot_config['referral_rewards']['free_month_after_referrals']
+        
+        if referrer['successful_referrals'] % required_referrals == 0:
+            # Will be used by the bot to notify about free month
+            return True
+    
+    return False
+
+# Check for pending logins and users waiting for logins
+def get_pending_approvals():
+    payments = read_json_file(PAYMENTS_FILE)
+    pending_approvals = []
+    
+    for payment_id, payment in payments.items():
+        if payment['status'] == 'pending' and payment.get('payer_name'):
+            pending_approvals.append(payment)
+    
+    return pending_approvals
+
+def get_users_waiting_for_login():
+    payments = read_json_file(PAYMENTS_FILE)
+    waiting_users = []
+    
+    for payment_id, payment in payments.items():
+        if payment['status'] == 'approved' and not payment['login_delivered']:
+            waiting_users.append(payment)
+    
+    return waiting_users
+
+# Functions to check and update sales status
+def check_should_suspend_sales():
+    logins = read_json_file(LOGINS_FILE)
+    total_logins = sum(len(logins[plan_type]) for plan_type in logins)
+    
+    if total_logins == 0:
+        return True
+    
+    return False
+
+def suspend_sales():
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    bot_config['sales_enabled'] = False
+    bot_config['sales_suspended_time'] = datetime.now().isoformat()
+    write_json_file(BOT_CONFIG_FILE, bot_config)
+
+def resume_sales():
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    bot_config['sales_enabled'] = True
+    bot_config['sales_suspended_time'] = None
+    bot_config['warning_sent'] = False
+    write_json_file(BOT_CONFIG_FILE, bot_config)
+
+def sales_enabled():
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    return bot_config.get('sales_enabled', True)
+
+# Coupon management functions
+def add_coupon(code, discount_type, discount_value, expiration_date, max_uses, min_purchase, applicable_plans):
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    
+    # Convert to uppercase for consistency
+    code = code.upper()
+    
+    # Check if coupon already exists
+    if code in bot_config.get('coupons', {}):
+        return False, "Cupom já existe."
+    
+    # Check valid discount value
+    if discount_type == 'percentage' and (discount_value <= 0 or discount_value >= 100):
+        return False, "Valor de desconto percentual deve estar entre 1 e 99."
+    
+    if discount_type == 'fixed' and discount_value <= 0:
+        return False, "Valor de desconto fixo deve ser maior que zero."
+    
+    # Don't allow 100% discount
+    if discount_type == 'percentage' and discount_value == 100:
+        return False, "Cupons com 100% de desconto não são permitidos."
+    
+    # Create the coupon
+    coupon = {
+        'code': code,
+        'discount_type': discount_type,
+        'discount_value': discount_value,
+        'expiration_date': expiration_date,
+        'max_uses': max_uses,
+        'min_purchase': min_purchase,
+        'applicable_plans': applicable_plans,
+        'uses': 0,
+        'users': []
+    }
+    
+    if 'coupons' not in bot_config:
+        bot_config['coupons'] = {}
+    
+    bot_config['coupons'][code] = coupon
+    write_json_file(BOT_CONFIG_FILE, bot_config)
+    
+    return True, "Cupom criado com sucesso."
+
+def validate_coupon(code, user_id, plan_type, amount):
+    if not code:
+        return None, "Código de cupom não fornecido."
+    
+    code = code.upper()
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    
+    if 'coupons' not in bot_config or code not in bot_config['coupons']:
+        return None, "Cupom não encontrado."
+    
+    coupon = bot_config['coupons'][code]
+    
+    # Check expiration
+    if coupon['expiration_date']:
+        expiration_date = datetime.fromisoformat(coupon['expiration_date'])
+        if datetime.now() > expiration_date:
+            return None, "Este cupom expirou."
+    
+    # Check max uses
+    if coupon['max_uses'] != -1 and coupon['uses'] >= coupon['max_uses']:
+        return None, "Este cupom atingiu o limite máximo de usos."
+    
+    # Check user already used
+    if str(user_id) in coupon['users']:
+        return None, "Você já utilizou este cupom anteriormente."
+    
+    # Check minimum purchase
+    if coupon['min_purchase'] and amount < coupon['min_purchase']:
+        return None, f"Valor mínimo para uso do cupom é R$ {coupon['min_purchase']:.2f}."
+    
+    # Check applicable plans
+    if 'all' not in coupon['applicable_plans'] and plan_type not in coupon['applicable_plans']:
+        return None, "Este cupom não é válido para o plano selecionado."
+    
+    # Check if it's the user's first purchase
+    user = get_user(user_id)
+    if user and user.get('is_first_buy', True):
+        return None, "Cupons não podem ser usados na primeira compra."
+    
+    # Calculate discount
+    if coupon['discount_type'] == 'percentage':
+        discount = amount * (coupon['discount_value'] / 100)
+    else:  # fixed
+        discount = coupon['discount_value']
+    
+    # Ensure discount doesn't make price negative
+    if amount - discount <= 0:
+        discount = amount - 0.01  # Leave minimal price to pay
+    
+    return {
+        'code': code,
+        'discount': discount,
+        'final_amount': amount - discount
+    }, "Cupom aplicado com sucesso!"
+
+def use_coupon(code, user_id):
+    code = code.upper()
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    
+    if 'coupons' in bot_config and code in bot_config['coupons']:
+        coupon = bot_config['coupons'][code]
+        coupon['uses'] += 1
+        coupon['users'].append(str(user_id))
+        write_json_file(BOT_CONFIG_FILE, bot_config)
+        return True
+    
+    return False
+
+def delete_coupon(code):
+    code = code.upper()
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    
+    if 'coupons' in bot_config and code in bot_config['coupons']:
+        del bot_config['coupons'][code]
+        write_json_file(BOT_CONFIG_FILE, bot_config)
+        return True
+    
+    return False
+
+# Check for expiring subscriptions
+def get_expiring_subscriptions(days_threshold=3):
+    users = read_json_file(USERS_FILE)
+    expiring_users = []
+    
+    for user_id, user_data in users.items():
+        if user_data.get('has_active_plan') and user_data.get('plan_expiration'):
+            expiration_date = datetime.fromisoformat(user_data['plan_expiration'])
+            days_left = (expiration_date - datetime.now()).days
+            
+            if 0 < days_left <= days_threshold:
+                expiring_users.append({
+                    'user_id': user_id,
+                    'days_left': days_left,
+                    'plan_type': user_data['plan_type'],
+                    'expiration_date': user_data['plan_expiration']
+                })
+    
+    return expiring_users
+
+# Format currency values
+def format_currency(value):
+    return f"R$ {value:.2f}".replace('.', ',')
+
+# Calculate price based on user status and plan
+def calculate_plan_price(user_id, plan_type):
+    user = get_user(user_id)
+    plan = PLANS[plan_type]
+    
+    # Check if user is eligible for first-time buyer discount
+    if user and user.get('is_first_buy') and plan['first_buy_discount']:
+        return plan['first_buy_price']
+    
+    return plan['regular_price']
+
+# Apply referral discount if applicable
+def apply_referral_discount(user_id, amount):
+    user = get_user(user_id)
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    
+    if not user or user.get('is_first_buy'):
+        return amount, False
+    
+    referrer_discount = bot_config['referral_rewards']['referrer_discount']
+    
+    # Check if this user was referred and it's their first non-first purchase
+    if user.get('referred_by') and not user.get('referral_discount_applied'):
+        # Apply discount
+        discount = (referrer_discount / 100) * amount
+        final_amount = amount - discount
+        
+        # Mark as applied
+        user['referral_discount_applied'] = True
+        save_user(user_id, user)
+        
+        return final_amount, True
+    
+    return amount, False

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logins - UniTV Admin</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 d-md-block bg-body-tertiary sidebar collapse" id="sidebar">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h3><i class="fas fa-tv text-primary me-2"></i>UniTV</h3>
+                        <p class="text-muted">Painel Admin</p>
+                    </div>
+                    <hr>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('users') }}">
+                                <i class="fas fa-users me-2"></i> Usuários
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('payments') }}">
+                                <i class="fas fa-money-bill-wave me-2"></i> Pagamentos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{{ url_for('logins') }}">
+                                <i class="fas fa-key me-2"></i> Logins
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('coupons') }}">
+                                <i class="fas fa-tags me-2"></i> Cupons
+                            </a>
+                        </li>
+                        <li class="nav-item mt-5">
+                            <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i> Sair
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <!-- Top navbar -->
+                <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 rounded">
+                    <div class="container-fluid">
+                        <button class="navbar-toggler d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                        <span class="navbar-brand mb-0 h1">Logins</span>
+                    </div>
+                </nav>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Add Login Form -->
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold">Adicionar Login</h6>
+                            </div>
+                            <div class="card-body">
+                                <form action="{{ url_for('add_login_route') }}" method="POST">
+                                    <div class="mb-3">
+                                        <label for="login" class="form-label">Login (email:senha)</label>
+                                        <input type="text" class="form-control" id="login" name="login" placeholder="usuario@unitv.com:senha123" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="plan_type" class="form-label">Plano</label>
+                                        <select class="form-select" id="plan_type" name="plan_type" required>
+                                            <option value="" selected disabled>Selecione o plano</option>
+                                            <option value="30_days">Plano 30 Dias</option>
+                                            <option value="6_months">Plano 6 Meses</option>
+                                            <option value="1_year">Plano 1 Ano</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-plus-circle me-1"></i> Adicionar Login
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-lg-6 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold">Adicionar Múltiplos Logins</h6>
+                            </div>
+                            <div class="card-body">
+                                <form action="{{ url_for('add_login_batch') }}" method="POST">
+                                    <div class="mb-3">
+                                        <label for="logins" class="form-label">Logins (um por linha)</label>
+                                        <textarea class="form-control" id="logins" name="logins" rows="5" placeholder="usuario1@unitv.com:senha123&#10;usuario2@unitv.com:senha456&#10;usuario3@unitv.com:senha789" required></textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="plan_type" class="form-label">Plano</label>
+                                        <select class="form-select" id="plan_type" name="plan_type" required>
+                                            <option value="" selected disabled>Selecione o plano</option>
+                                            <option value="30_days">Plano 30 Dias</option>
+                                            <option value="6_months">Plano 6 Meses</option>
+                                            <option value="1_year">Plano 1 Ano</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-upload me-1"></i> Adicionar em Lote
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Available Logins -->
+                <div class="row">
+                    {% for plan_type, logins_list in logins.items() %}
+                    <div class="col-lg-4 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold">
+                                    {% if plan_type == '30_days' %}
+                                    Plano 30 Dias
+                                    {% elif plan_type == '6_months' %}
+                                    Plano 6 Meses
+                                    {% elif plan_type == '1_year' %}
+                                    Plano 1 Ano
+                                    {% endif %}
+                                </h6>
+                                <span class="badge bg-info">{{ logins_list|length }} logins</span>
+                            </div>
+                            <div class="card-body">
+                                {% if logins_list %}
+                                <div class="list-group">
+                                    {% for login in logins_list %}
+                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                        <code>{{ login }}</code>
+                                        <button class="btn btn-sm btn-danger remove-login" data-login="{{ login }}" data-plan="{{ plan_type }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <p class="text-center text-muted">Nenhum login disponível para este plano.</p>
+                                {% endif %}
+                            </div>
+                            <div class="card-footer {% if not logins_list %}bg-danger bg-opacity-10{% endif %}">
+                                {% if not logins_list %}
+                                <div class="text-danger">
+                                    <i class="fas fa-exclamation-triangle me-1"></i> É necessário adicionar logins para este plano.
+                                </div>
+                                {% else %}
+                                <small class="text-muted">
+                                    Preço: R$ {{ "%.2f"|format(plans[plan_type].regular_price) }} 
+                                    {% if plans[plan_type].first_buy_discount %}
+                                    (Primeira compra: R$ {{ "%.2f"|format(plans[plan_type].first_buy_price) }})
+                                    {% endif %}
+                                </small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Footer -->
+                <footer class="bg-body-tertiary rounded p-3 mt-4">
+                    <div class="text-center">
+                        <span class="text-muted">UniTV Admin Panel &copy; 2023</span>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS and Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Handle remove login buttons
+            $('.remove-login').click(function() {
+                const login = $(this).data('login');
+                const plan = $(this).data('plan');
+                const listItem = $(this).parent();
+                
+                if (confirm('Tem certeza que deseja remover este login?')) {
+                    $.ajax({
+                        url: '{{ url_for("remove_login") }}',
+                        type: 'POST',
+                        data: {
+                            login: login,
+                            plan_type: plan
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                listItem.fadeOut(300, function() {
+                                    $(this).remove();
+                                    
+                                    // Update the count
+                                    const cardHeader = listItem.closest('.card').find('.card-header .badge');
+                                    const currentCount = parseInt(cardHeader.text());
+                                    cardHeader.text((currentCount - 1) + ' logins');
+                                    
+                                    // Check if there are no more logins
+                                    const listGroup = listItem.closest('.list-group');
+                                    if (listGroup.children().length <= 1) {
+                                        listGroup.html('<p class="text-center text-muted">Nenhum login disponível para este plano.</p>');
+                                        listItem.closest('.card').find('.card-footer').addClass('bg-danger bg-opacity-10');
+                                        listItem.closest('.card').find('.card-footer').html('<div class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i> É necessário adicionar logins para este plano.</div>');
+                                    }
+                                });
+                            } else {
+                                alert('Erro ao remover login: ' + response.error);
+                            }
+                        },
+                        error: function() {
+                            alert('Erro de comunicação com o servidor');
+                        }
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

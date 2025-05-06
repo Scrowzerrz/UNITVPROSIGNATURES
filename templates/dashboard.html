@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - UniTV Admin</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 d-md-block bg-body-tertiary sidebar collapse" id="sidebar">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h3><i class="fas fa-tv text-primary me-2"></i>UniTV</h3>
+                        <p class="text-muted">Painel Admin</p>
+                    </div>
+                    <hr>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('users') }}">
+                                <i class="fas fa-users me-2"></i> Usuários
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('payments') }}">
+                                <i class="fas fa-money-bill-wave me-2"></i> Pagamentos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logins') }}">
+                                <i class="fas fa-key me-2"></i> Logins
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('coupons') }}">
+                                <i class="fas fa-tags me-2"></i> Cupons
+                            </a>
+                        </li>
+                        <li class="nav-item mt-5">
+                            <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i> Sair
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <!-- Top navbar -->
+                <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 rounded">
+                    <div class="container-fluid">
+                        <button class="navbar-toggler d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                        <span class="navbar-brand mb-0 h1">Dashboard</span>
+                        <div class="d-flex">
+                            {% if stats.sales_status %}
+                            <form action="{{ url_for('toggle_sales') }}" method="POST">
+                                <button type="submit" class="btn btn-danger btn-sm">
+                                    <i class="fas fa-ban me-1"></i> Suspender Vendas
+                                </button>
+                            </form>
+                            {% else %}
+                            <form action="{{ url_for('toggle_sales') }}" method="POST">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="fas fa-play me-1"></i> Retomar Vendas
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </nav>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Status cards -->
+                <div class="row">
+                    <div class="col-md-6 col-xl-3 mb-4">
+                        <div class="card border-left-primary shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col-auto">
+                                        <i class="fas fa-users fa-2x text-primary"></i>
+                                    </div>
+                                    <div class="col ml-3">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                            Usuários ativos
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold">{{ stats.active_users }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-primary bg-opacity-10">
+                                <small class="text-muted">Total de usuários: {{ stats.total_users }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 col-xl-3 mb-4">
+                        <div class="card border-left-warning shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col-auto">
+                                        <i class="fas fa-money-bill-wave fa-2x text-warning"></i>
+                                    </div>
+                                    <div class="col ml-3">
+                                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                            Pagamentos pendentes
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold">{{ stats.pending_approvals }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-warning bg-opacity-10">
+                                <a href="{{ url_for('payments') }}" class="text-warning text-decoration-none">
+                                    <small>Ver detalhes <i class="fas fa-arrow-right ms-1"></i></small>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 col-xl-3 mb-4">
+                        <div class="card border-left-info shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col-auto">
+                                        <i class="fas fa-key fa-2x text-info"></i>
+                                    </div>
+                                    <div class="col ml-3">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                            Logins disponíveis
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold">{{ stats.available_logins.30_days + stats.available_logins.6_months + stats.available_logins.1_year }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-info bg-opacity-10">
+                                <a href="{{ url_for('logins') }}" class="text-info text-decoration-none">
+                                    <small>Gerenciar logins <i class="fas fa-arrow-right ms-1"></i></small>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 col-xl-3 mb-4">
+                        <div class="card border-left-success shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col-auto">
+                                        <i class="fas fa-tags fa-2x text-success"></i>
+                                    </div>
+                                    <div class="col ml-3">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                            Cupons ativos
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold">{{ stats.active_coupons }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-success bg-opacity-10">
+                                <a href="{{ url_for('coupons') }}" class="text-success text-decoration-none">
+                                    <small>Gerenciar cupons <i class="fas fa-arrow-right ms-1"></i></small>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Alerts -->
+                {% if stats.pending_approvals > 0 %}
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-exclamation-triangle me-2"></i> Atenção!</strong> Existem {{ stats.pending_approvals }} pagamentos aguardando sua aprovação.
+                    <a href="{{ url_for('payments') }}" class="alert-link">Verificar agora</a>.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+                
+                {% if stats.waiting_for_login > 0 %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-exclamation-circle me-2"></i> Importante!</strong> {{ stats.waiting_for_login }} usuários estão aguardando login após pagamento aprovado.
+                    <a href="{{ url_for('logins') }}" class="alert-link">Adicionar logins</a>.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+                
+                {% if not stats.sales_status %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-ban me-2"></i> Vendas suspensas!</strong> As vendas estão atualmente suspensas.
+                    <form action="{{ url_for('toggle_sales') }}" method="POST" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-success">Retomar vendas</button>
+                    </form>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+                
+                {% if stats.available_logins.30_days == 0 or stats.available_logins.6_months == 0 or stats.available_logins.1_year == 0 %}
+                <div class="alert alert-warning alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-exclamation-triangle me-2"></i> Atenção!</strong> Alguns planos estão sem logins disponíveis:
+                    <ul class="mb-0 mt-2">
+                        {% if stats.available_logins.30_days == 0 %}
+                        <li>Plano de 30 dias: <span class="badge bg-danger">Sem logins</span></li>
+                        {% endif %}
+                        {% if stats.available_logins.6_months == 0 %}
+                        <li>Plano de 6 meses: <span class="badge bg-danger">Sem logins</span></li>
+                        {% endif %}
+                        {% if stats.available_logins.1_year == 0 %}
+                        <li>Plano de 1 ano: <span class="badge bg-danger">Sem logins</span></li>
+                        {% endif %}
+                    </ul>
+                    <a href="{{ url_for('logins') }}" class="alert-link">Adicionar logins</a>.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+                
+                <!-- Login Status -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                <h6 class="m-0 font-weight-bold">Status de Logins</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" style="position: relative; height:300px;">
+                                    <canvas id="loginStatusChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Actions -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card shadow mb-4">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold">Ações Rápidas</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3 mb-3">
+                                        <a href="{{ url_for('payments') }}" class="btn btn-primary btn-block w-100 py-3">
+                                            <i class="fas fa-money-bill-wave me-2"></i> Verificar Pagamentos
+                                        </a>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <a href="{{ url_for('logins') }}" class="btn btn-info btn-block w-100 py-3">
+                                            <i class="fas fa-key me-2"></i> Adicionar Logins
+                                        </a>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <a href="{{ url_for('users') }}" class="btn btn-secondary btn-block w-100 py-3">
+                                            <i class="fas fa-users me-2"></i> Gerenciar Usuários
+                                        </a>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <a href="{{ url_for('coupons') }}" class="btn btn-success btn-block w-100 py-3">
+                                            <i class="fas fa-tags me-2"></i> Criar Cupom
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <footer class="bg-body-tertiary rounded p-3 mt-4">
+                    <div class="text-center">
+                        <span class="text-muted">UniTV Admin Panel &copy; 2023</span>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <!-- Chart initialization -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Login status chart
+            const ctx = document.getElementById('loginStatusChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Plano 30 dias', 'Plano 6 meses', 'Plano 1 ano'],
+                    datasets: [{
+                        label: 'Logins Disponíveis',
+                        data: [
+                            {{ stats.available_logins.30_days }}, 
+                            {{ stats.available_logins.6_months }}, 
+                            {{ stats.available_logins.1_year }}
+                        ],
+                        backgroundColor: [
+                            'rgba(78, 115, 223, 0.8)',
+                            'rgba(54, 185, 204, 0.8)',
+                            'rgba(28, 200, 138, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(78, 115, 223, 1)',
+                            'rgba(54, 185, 204, 1)',
+                            'rgba(28, 200, 138, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

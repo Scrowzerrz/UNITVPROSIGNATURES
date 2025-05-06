@@ -1,0 +1,117 @@
+/* Custom styles for UniTV Admin Dashboard */
+
+/* Sidebar styles */
+.sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 48px 0 0;
+    box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+}
+
+.sidebar-sticky {
+    position: relative;
+    top: 0;
+    height: calc(100vh - 48px);
+    padding-top: .5rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Main content area */
+main {
+    padding-top: 1.5rem;
+}
+
+/* Dashboard card styling */
+.card-body {
+    position: relative;
+}
+
+.card .border-left-primary {
+    border-left: 4px solid var(--bs-primary) !important;
+}
+
+.card .border-left-success {
+    border-left: 4px solid var(--bs-success) !important;
+}
+
+.card .border-left-info {
+    border-left: 4px solid var(--bs-info) !important;
+}
+
+.card .border-left-warning {
+    border-left: 4px solid var(--bs-warning) !important;
+}
+
+.card .border-left-danger {
+    border-left: 4px solid var(--bs-danger) !important;
+}
+
+/* Data tables container */
+.table-responsive {
+    overflow-x: auto;
+}
+
+/* Custom badge colors */
+.badge {
+    padding: 0.4em 0.6em;
+}
+
+/* Login list styling */
+.list-group {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* Footer styles */
+footer {
+    margin-top: 2rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: static;
+        height: auto;
+        padding-top: 0;
+    }
+    
+    .sidebar-sticky {
+        height: auto;
+    }
+    
+    main {
+        margin-left: 0 !important;
+    }
+}
+
+/* Helper classes */
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Form controls */
+.form-control:focus, .form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Code styling */
+code {
+    padding: 0.2em 0.4em;
+    font-size: 85%;
+    border-radius: 6px;
+}
+
+/* Chart container */
+.chart-container {
+    position: relative;
+    margin: auto;
+}

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pagamentos - UniTV Admin</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 d-md-block bg-body-tertiary sidebar collapse" id="sidebar">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h3><i class="fas fa-tv text-primary me-2"></i>UniTV</h3>
+                        <p class="text-muted">Painel Admin</p>
+                    </div>
+                    <hr>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('users') }}">
+                                <i class="fas fa-users me-2"></i> Usuários
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{{ url_for('payments') }}">
+                                <i class="fas fa-money-bill-wave me-2"></i> Pagamentos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logins') }}">
+                                <i class="fas fa-key me-2"></i> Logins
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('coupons') }}">
+                                <i class="fas fa-tags me-2"></i> Cupons
+                            </a>
+                        </li>
+                        <li class="nav-item mt-5">
+                            <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i> Sair
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <!-- Top navbar -->
+                <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 rounded">
+                    <div class="container-fluid">
+                        <button class="navbar-toggler d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                        <span class="navbar-brand mb-0 h1">Pagamentos</span>
+                    </div>
+                </nav>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Pending Payments -->
+                {% set pending_payments = [] %}
+                {% for payment in payments %}
+                    {% if payment.status == 'pending_approval' %}
+                        {% set pending_payments = pending_payments.append(payment) %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if pending_payments %}
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 bg-warning bg-opacity-25">
+                        <h6 class="m-0 font-weight-bold text-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i> Pagamentos Pendentes de Aprovação
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="pendingPaymentsTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Usuário</th>
+                                        <th>Nome do Pagador</th>
+                                        <th>Plano</th>
+                                        <th>Valor</th>
+                                        <th>Data</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in payments %}
+                                    {% if payment.status == 'pending_approval' %}
+                                    <tr>
+                                        <td>{{ payment.id[:8] }}...</td>
+                                        <td>
+                                            <a href="{{ url_for('user_detail', user_id=payment.user_id) }}" class="text-reset">
+                                                {{ payment.first_name }} (@{{ payment.username or 'sem_username' }})
+                                            </a>
+                                        </td>
+                                        <td>{{ payment.payer_name }}</td>
+                                        <td>
+                                            {% if payment.plan_type == '30_days' %}Plano 30 Dias
+                                            {% elif payment.plan_type == '6_months' %}Plano 6 Meses
+                                            {% elif payment.plan_type == '1_year' %}Plano 1 Ano
+                                            {% endif %}
+                                        </td>
+                                        <td>R$ {{ "%.2f"|format(payment.amount) }}</td>
+                                        <td data-sort="{{ payment.created_at }}">{{ payment.created_at[:16].replace('T', ' ') }}</td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <form action="{{ url_for('approve_payment', payment_id=payment.id) }}" method="POST" class="d-inline">
+                                                    <button type="submit" class="btn btn-success btn-sm me-1">
+                                                        <i class="fas fa-check"></i> Aprovar
+                                                    </button>
+                                                </form>
+                                                <form action="{{ url_for('reject_payment', payment_id=payment.id) }}" method="POST" class="d-inline">
+                                                    <button type="submit" class="btn btn-danger btn-sm">
+                                                        <i class="fas fa-times"></i> Rejeitar
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- All Payments -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold">Todos os Pagamentos</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="paymentsTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Usuário</th>
+                                        <th>Plano</th>
+                                        <th>Valor</th>
+                                        <th>Data</th>
+                                        <th>Status</th>
+                                        <th>Nome do Pagador</th>
+                                        <th>Login Entregue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for payment in payments %}
+                                    <tr>
+                                        <td>{{ payment.id[:8] }}...</td>
+                                        <td>
+                                            <a href="{{ url_for('user_detail', user_id=payment.user_id) }}" class="text-reset">
+                                                {{ payment.first_name }} (@{{ payment.username or 'sem_username' }})
+                                            </a>
+                                        </td>
+                                        <td>
+                                            {% if payment.plan_type == '30_days' %}Plano 30 Dias
+                                            {% elif payment.plan_type == '6_months' %}Plano 6 Meses
+                                            {% elif payment.plan_type == '1_year' %}Plano 1 Ano
+                                            {% endif %}
+                                        </td>
+                                        <td>R$ {{ "%.2f"|format(payment.amount) }}</td>
+                                        <td data-sort="{{ payment.created_at }}">{{ payment.created_at[:16].replace('T', ' ') }}</td>
+                                        <td>
+                                            {% if payment.status == 'completed' %}
+                                            <span class="badge bg-success">Concluído</span>
+                                            {% elif payment.status == 'approved' %}
+                                            <span class="badge bg-primary">Aprovado</span>
+                                            {% elif payment.status == 'pending_approval' %}
+                                            <span class="badge bg-warning">Aguardando Aprovação</span>
+                                            {% elif payment.status == 'pending' %}
+                                            <span class="badge bg-info">Pendente</span>
+                                            {% elif payment.status == 'rejected' %}
+                                            <span class="badge bg-danger">Rejeitado</span>
+                                            {% elif payment.status == 'cancelled' %}
+                                            <span class="badge bg-secondary">Cancelado</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">{{ payment.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ payment.payer_name }}</td>
+                                        <td class="text-center">
+                                            {% if payment.login_delivered %}
+                                            <i class="fas fa-check text-success"></i>
+                                            {% elif payment.status == 'approved' or payment.status == 'completed' %}
+                                            <i class="fas fa-times text-danger"></i>
+                                            {% else %}
+                                            <i class="fas fa-minus text-muted"></i>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <footer class="bg-body-tertiary rounded p-3 mt-4">
+                    <div class="text-center">
+                        <span class="text-muted">UniTV Admin Panel &copy; 2023</span>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS and Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <script>
+        $(document).ready(function() {
+            $('#pendingPaymentsTable').DataTable({
+                order: [[5, 'desc']], // Sort by date
+                language: {
+                    search: "Buscar:",
+                    lengthMenu: "Mostrar _MENU_ registros por página",
+                    zeroRecords: "Nenhum registro encontrado",
+                    info: "Mostrando _PAGE_ de _PAGES_",
+                    infoEmpty: "Nenhum registro disponível",
+                    infoFiltered: "(filtrado de _MAX_ registros totais)",
+                    paginate: {
+                        first: "Primeiro",
+                        last: "Último",
+                        next: "Próximo",
+                        previous: "Anterior"
+                    }
+                }
+            });
+            
+            $('#paymentsTable').DataTable({
+                order: [[4, 'desc']], // Sort by date
+                language: {
+                    search: "Buscar:",
+                    lengthMenu: "Mostrar _MENU_ registros por página",
+                    zeroRecords: "Nenhum registro encontrado",
+                    info: "Mostrando _PAGE_ de _PAGES_",
+                    infoEmpty: "Nenhum registro disponível",
+                    infoFiltered: "(filtrado de _MAX_ registros totais)",
+                    paginate: {
+                        first: "Primeiro",
+                        last: "Último",
+                        next: "Próximo",
+                        previous: "Anterior"
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cupons - UniTV Admin</title>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 d-md-block bg-body-tertiary sidebar collapse" id="sidebar">
+                <div class="position-sticky pt-3">
+                    <div class="text-center mb-4">
+                        <h3><i class="fas fa-tv text-primary me-2"></i>UniTV</h3>
+                        <p class="text-muted">Painel Admin</p>
+                    </div>
+                    <hr>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-2"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('users') }}">
+                                <i class="fas fa-users me-2"></i> Usuários
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('payments') }}">
+                                <i class="fas fa-money-bill-wave me-2"></i> Pagamentos
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logins') }}">
+                                <i class="fas fa-key me-2"></i> Logins
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="{{ url_for('coupons') }}">
+                                <i class="fas fa-tags me-2"></i> Cupons
+                            </a>
+                        </li>
+                        <li class="nav-item mt-5">
+                            <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i> Sair
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <!-- Top navbar -->
+                <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 rounded">
+                    <div class="container-fluid">
+                        <button class="navbar-toggler d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation">
+                            <span class="navbar-toggler-icon"></span>
+                        </button>
+                        <span class="navbar-brand mb-0 h1">Cupons</span>
+                    </div>
+                </nav>
+                
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <!-- Create Coupon Card -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold">Criar Novo Cupom</h6>
+                    </div>
+                    <div class="card-body">
+                        <form action="{{ url_for('add_coupon_route') }}" method="POST">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="code" class="form-label">Código do Cupom</label>
+                                    <input type="text" class="form-control" id="code" name="code" placeholder="Ex: VERAO20" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="discount_type" class="form-label">Tipo de Desconto</label>
+                                    <select class="form-select" id="discount_type" name="discount_type" required>
+                                        <option value="" selected disabled>Selecione o tipo</option>
+                                        <option value="percentage">Percentual (%)</option>
+                                        <option value="fixed">Valor Fixo (R$)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="discount_value" class="form-label">Valor do Desconto</label>
+                                    <input type="number" step="0.01" min="0.01" class="form-control" id="discount_value" name="discount_value" placeholder="Ex: 10" required>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="expiration_date" class="form-label">Data de Validade</label>
+                                    <input type="text" class="form-control" id="expiration_date" name="expiration_date" placeholder="DD/MM/AAAA">
+                                    <small class="text-muted">Deixe em branco para não expirar</small>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="max_uses" class="form-label">Máximo de Usos</label>
+                                    <select class="form-select" id="max_uses" name="max_uses" required>
+                                        <option value="unlimited">Ilimitado</option>
+                                        <option value="10">10</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                        <option value="200">200</option>
+                                        <option value="500">500</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="min_purchase" class="form-label">Valor Mínimo de Compra</label>
+                                    <input type="number" step="0.01" min="0" class="form-control" id="min_purchase" name="min_purchase" placeholder="Ex: 50.00" value="0">
+                                    <small class="text-muted">0 para nenhum valor mínimo</small>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-12 mb-3">
+                                    <label class="form-label">Planos Aplicáveis</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="all_plans" name="applicable_plans" value="all" checked>
+                                        <label class="form-check-label" for="all_plans">
+                                            Todos os planos
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input plan-checkbox" type="checkbox" id="plan_30_days" name="applicable_plans" value="30_days">
+                                        <label class="form-check-label" for="plan_30_days">
+                                            Plano 30 Dias
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input plan-checkbox" type="checkbox" id="plan_6_months" name="applicable_plans" value="6_months">
+                                        <label class="form-check-label" for="plan_6_months">
+                                            Plano 6 Meses
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input plan-checkbox" type="checkbox" id="plan_1_year" name="applicable_plans" value="1_year">
+                                        <label class="form-check-label" for="plan_1_year">
+                                            Plano 1 Ano
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-plus-circle me-1"></i> Criar Cupom
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Active Coupons -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold">Cupons Ativos</h6>
+                    </div>
+                    <div class="card-body">
+                        {% if coupons %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="couponsTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Desconto</th>
+                                        <th>Validade</th>
+                                        <th>Usos</th>
+                                        <th>Valor Mínimo</th>
+                                        <th>Planos</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for code, coupon in coupons.items() %}
+                                    <tr>
+                                        <td><strong>{{ code }}</strong></td>
+                                        <td>{{ coupon.discount_formatted }}</td>
+                                        <td>{{ coupon.expiration_formatted }}</td>
+                                        <td>{{ coupon.uses_formatted }}</td>
+                                        <td>{{ coupon.min_purchase_formatted }}</td>
+                                        <td>
+                                            {% if 'all' in coupon.applicable_plans %}
+                                            <span class="badge bg-success">Todos</span>
+                                            {% else %}
+                                                {% for plan in coupon.applicable_plans %}
+                                                    {% if plan == '30_days' %}
+                                                    <span class="badge bg-primary">30 Dias</span>
+                                                    {% elif plan == '6_months' %}
+                                                    <span class="badge bg-info">6 Meses</span>
+                                                    {% elif plan == '1_year' %}
+                                                    <span class="badge bg-warning">1 Ano</span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <form action="{{ url_for('delete_coupon_route', code=code) }}" method="POST" class="d-inline">
+                                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja excluir este cupom?')">
+                                                    <i class="fas fa-trash"></i> Excluir
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-center text-muted">Não há cupons ativos no momento.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <footer class="bg-body-tertiary rounded p-3 mt-4">
+                    <div class="text-center">
+                        <span class="text-muted">UniTV Admin Panel &copy; 2023</span>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS and Popper.js -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            if ($('#couponsTable').length) {
+                $('#couponsTable').DataTable({
+                    language: {
+                        search: "Buscar:",
+                        lengthMenu: "Mostrar _MENU_ registros por página",
+                        zeroRecords: "Nenhum registro encontrado",
+                        info: "Mostrando _PAGE_ de _PAGES_",
+                        infoEmpty: "Nenhum registro disponível",
+                        infoFiltered: "(filtrado de _MAX_ registros totais)",
+                        paginate: {
+                            first: "Primeiro",
+                            last: "Último",
+                            next: "Próximo",
+                            previous: "Anterior"
+                        }
+                    }
+                });
+            }
+            
+            // Handle "All plans" checkbox
+            $('#all_plans').change(function() {
+                if ($(this).is(':checked')) {
+                    $('.plan-checkbox').prop('checked', false);
+                    $('.plan-checkbox').prop('disabled', true);
+                } else {
+                    $('.plan-checkbox').prop('disabled', false);
+                }
+            });
+            
+            // Handle individual plan checkboxes
+            $('.plan-checkbox').change(function() {
+                if ($('.plan-checkbox:checked').length > 0) {
+                    $('#all_plans').prop('checked', false);
+                }
+            });
+            
+            // Format date input
+            $('#expiration_date').on('input', function() {
+                let value = $(this).val().replace(/\D/g, '');
+                if (value.length > 0) {
+                    if (value.length <= 2) {
+                        value = value;
+                    } else if (value.length <= 4) {
+                        value = value.substring(0, 2) + '/' + value.substring(2);
+                    } else {
+                        value = value.substring(0, 2) + '/' + value.substring(2, 4) + '/' + value.substring(4, 8);
+                    }
+                    $(this).val(value);
+                }
+            });
+            
+            // Show appropriate input based on discount type
+            $('#discount_type').change(function() {
+                const type = $(this).val();
+                const valueInput = $('#discount_value');
+                
+                if (type === 'percentage') {
+                    valueInput.attr('placeholder', 'Ex: 10 (para 10%)');
+                    valueInput.attr('max', '99');
+                } else {
+                    valueInput.attr('placeholder', 'Ex: 5.00 (para R$ 5,00)');
+                    valueInput.removeAttr('max');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
