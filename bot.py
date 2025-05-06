@@ -838,6 +838,7 @@ def pay_with_pix_manual(call):
 import requests
 import json
 import uuid
+import os
 
 # Handler for PIX via Mercado Pago payment method selection
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pay_pix_mp_"))
@@ -890,7 +891,7 @@ def pay_with_pix_mercado_pago(call):
                     "number": "00000000000"  # CPF fictício, em produção usar CPF real
                 }
             },
-            "notification_url": f"https://webhook.site/{uuid.uuid4()}"  # Em produção, usar URL real
+            "notification_url": "https://unitv-subscription-bot.replit.app/webhooks/mercadopago"  # URL real para notificações
         }
         
         # Configurar headers
