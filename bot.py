@@ -431,16 +431,23 @@ def select_plan(call):
     
     confirm_msg += "Deseja prosseguir com a compra?"
     
+    # Format price for callback data as string without currency symbol
+    price_str = str(price).replace('.', '_')
+    
+    # Log the callback data being created
+    logger.info(f"Creating confirm button with callback_data: confirm_plan_{plan_id}_{price_str}")
+    logger.info(f"Creating coupon button with callback_data: use_coupon_{plan_id}_{price_str}")
+    
     # Create keyboard
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     keyboard.add(
-        types.InlineKeyboardButton("✅ Confirmar", callback_data=f"confirm_plan_{plan_id}_{price}"),
+        types.InlineKeyboardButton("✅ Confirmar", callback_data=f"confirm_plan_{plan_id}_{price_str}"),
         types.InlineKeyboardButton("❌ Cancelar", callback_data="show_plans")
     )
     
     # Add coupon button
     keyboard.add(
-        types.InlineKeyboardButton("🎟️ Tenho um cupom", callback_data=f"use_coupon_{plan_id}_{price}")
+        types.InlineKeyboardButton("🎟️ Tenho um cupom", callback_data=f"use_coupon_{plan_id}_{price_str}")
     )
     
     # Edit message
@@ -455,10 +462,34 @@ def select_plan(call):
 # Use coupon
 @bot.callback_query_handler(func=lambda call: call.data.startswith("use_coupon_"))
 def use_coupon_callback(call):
+    # Log the callback data for debugging
+    logger.info(f"Processing coupon callback: {call.data}")
+    
     # Extract data
     data_parts = call.data.split("_")
+    
+    # Ensure we have enough parts
+    if len(data_parts) < 4:
+        bot.answer_callback_query(call.id, "Formato de dados inválido!")
+        logger.error(f"Invalid coupon data format: {call.data}")
+        return
+    
     plan_id = data_parts[2]
-    price = float(data_parts[3])
+    
+    # Convert string price back to float (format was like 20_00 for 20.00)
+    try:
+        # Try to handle both formats: float or underscore-separated
+        if '.' in data_parts[3]:
+            price = float(data_parts[3])
+        else:
+            price_str = data_parts[3].replace('_', '.')
+            price = float(price_str)
+            logger.info(f"Converted price from {data_parts[3]} to {price}")
+    except ValueError:
+        # If price conversion fails, recalculate it
+        logger.error(f"Error converting price {data_parts[3]} to float")
+        price = calculate_plan_price(call.from_user.id, plan_id)
+        logger.info(f"Recalculated price: {price}")
     
     # Check if user is eligible to use coupons (not first purchase)
     user_id = call.from_user.id
@@ -541,10 +572,35 @@ def process_coupon_code(message, plan_id, price):
 # Confirm plan
 @bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_plan_"))
 def confirm_plan(call):
+    # Log the callback data for debugging
+    logger.info(f"Processing confirm plan callback: {call.data}")
+    
     # Extract data
     data_parts = call.data.split("_")
+    
+    # Ensure we have enough parts
+    if len(data_parts) < 4:
+        bot.answer_callback_query(call.id, "Formato de dados inválido!")
+        logger.error(f"Invalid confirm plan data format: {call.data}")
+        return
+    
     plan_id = data_parts[2]
-    price = float(data_parts[3])
+    
+    # Convert string price back to float (format was like 20_00 for 20.00)
+    try:
+        # Try to handle both formats: float or underscore-separated
+        if '.' in data_parts[3]:
+            price = float(data_parts[3])
+        else:
+            price_str = data_parts[3].replace('_', '.')
+            price = float(price_str)
+            logger.info(f"Converted price from {data_parts[3]} to {price}")
+    except ValueError:
+        # If price conversion fails, recalculate it
+        logger.error(f"Error converting price {data_parts[3]} to float")
+        price = calculate_plan_price(call.from_user.id, plan_id)
+        logger.info(f"Recalculated price: {price}")
+    
     coupon_code = data_parts[4] if len(data_parts) > 4 else None
     
     user_id = call.from_user.id
