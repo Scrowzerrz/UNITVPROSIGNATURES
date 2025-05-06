@@ -83,18 +83,23 @@ def login():
             
         # Verify access code for this telegram ID
         if verify_access_code(telegram_id, access_code):
-            # Check if user is allowed
-            if is_allowed_telegram_id(telegram_id):
+            # Check if user is admin or allowed
+            if is_admin_telegram_id(telegram_id) or is_allowed_telegram_id(telegram_id):
                 # Create new session
                 session_token = create_session(telegram_id)
                 session['logged_in'] = True
                 session['session_token'] = session_token
                 session['telegram_id'] = telegram_id
                 
+                # Log the successful login
+                logger.info(f"Login successful for Telegram ID: {telegram_id}")
+                
                 flash('Login realizado com sucesso!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('dashboard'))
             else:
+                # Log the unauthorized access attempt
+                logger.warning(f"Unauthorized access attempt from Telegram ID: {telegram_id}")
                 flash('Seu ID do Telegram não tem permissão para acessar o painel administrativo.', 'danger')
         else:
             flash('Código de acesso inválido ou expirado.', 'danger')

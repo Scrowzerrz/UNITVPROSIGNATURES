@@ -1,7 +1,6 @@
 import os
 import threading
 import logging
-from app import app
 from config import BOT_TOKEN
 
 # Configure logging
@@ -14,11 +13,25 @@ def start_bot():
         try:
             # Import inside function to avoid immediate loading if token is not set
             from bot import run_bot
+            logger.info("Starting Telegram bot in background thread...")
             run_bot()
         except Exception as e:
             logger.error(f"Error running bot: {e}")
     else:
         logger.warning("No Telegram bot token provided. Bot will not be started.")
+
+# Import the Flask app
+from app import app
+
+# Start bot in a background thread
+if BOT_TOKEN:
+    logger.info("Initializing Telegram bot thread...")
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    logger.info("Telegram bot thread started")
+else:
+    logger.warning("Telegram bot not started. Set TELEGRAM_BOT_TOKEN environment variable to enable it.")
 
 if __name__ == "__main__":
     # Start bot thread only if token is available
@@ -32,4 +45,5 @@ if __name__ == "__main__":
     
     # Start flask app
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    from app import app as flask_app
+    flask_app.run(host="0.0.0.0", port=port, debug=True)
