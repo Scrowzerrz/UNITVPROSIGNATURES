@@ -752,6 +752,150 @@ def save_mercado_pago_settings():
                               message='Erro ao salvar configurações Mercado Pago.',
                               message_type='danger'))
 
+# Webhook para receber notificações do Mercado Pago
+@app.route('/webhooks/mercadopago', methods=['POST'])
+def mercadopago_webhook():
+    """
+    Webhook para processar notificações de pagamento do Mercado Pago.
+    Esta rota recebe notificações quando um pagamento via PIX é concluído no Mercado Pago.
+    """
+    try:
+        logger.info("Received Mercado Pago webhook")
+        
+        # Verificar se a notificação é válida
+        data = request.get_json()
+        logger.debug(f"Mercado Pago webhook data: {data}")
+        
+        if not data:
+            logger.warning("Invalid webhook payload: no JSON data")
+            return jsonify({"status": "error", "message": "Invalid payload"}), 400
+        
+        # Verificar o tipo de notificação
+        if 'action' not in data or data['action'] != 'payment.updated':
+            logger.info(f"Ignoring notification with action: {data.get('action', 'unknown')}")
+            return jsonify({"status": "success", "message": "Notification received but not processed"}), 200
+        
+        # Obter o ID do pagamento do Mercado Pago
+        mp_payment_id = data.get('data', {}).get('id')
+        if not mp_payment_id:
+            logger.warning("No payment ID in webhook data")
+            return jsonify({"status": "error", "message": "Missing payment ID"}), 400
+        
+        # Obter as configurações do Mercado Pago
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
+        access_token = mp_settings.get('access_token')
+        
+        if not access_token:
+            logger.error("Mercado Pago access token not configured")
+            return jsonify({"status": "error", "message": "Mercado Pago not configured"}), 500
+        
+        # Verificar o status do pagamento na API do Mercado Pago
+        headers = {"Authorization": f"Bearer {access_token}"}
+        mp_response = requests.get(f"https://api.mercadopago.com/v1/payments/{mp_payment_id}", headers=headers)
+        
+        if mp_response.status_code != 200:
+            logger.error(f"Failed to get payment data from Mercado Pago: {mp_response.status_code}")
+            return jsonify({"status": "error", "message": "Failed to verify payment"}), 500
+        
+        payment_data = mp_response.json()
+        payment_status = payment_data.get('status')
+        
+        # Se o pagamento foi aprovado
+        if payment_status == 'approved':
+            # Encontrar o pagamento em nosso sistema que tem esse ID do Mercado Pago
+            payments = read_json_file(PAYMENTS_FILE) or {}
+            our_payment_id = None
+            our_payment = None
+            
+            for pid, p in payments.items():
+                if p.get('mp_payment_id') == str(mp_payment_id):
+                    our_payment_id = pid
+                    our_payment = p
+                    break
+            
+            if not our_payment:
+                logger.warning(f"No matching payment found for Mercado Pago payment {mp_payment_id}")
+                return jsonify({"status": "error", "message": "Payment not found"}), 404
+            
+            # Atualizar o status do pagamento para aprovado
+            update_payment(our_payment_id, {
+                'status': 'approved',
+                'approved_at': datetime.now().isoformat(),
+                'mp_payment_data': payment_data
+            })
+            
+            # Processar a entrega do login
+            user_id = our_payment.get('user_id')
+            plan_type = our_payment.get('plan_type')
+            
+            logger.info(f"Processing automatic login delivery for payment {our_payment_id}")
+            
+            # Verificar se há login disponível
+            login = get_available_login(plan_type)
+            
+            if login:
+                # Atribuir login ao usuário
+                assigned_login = assign_login_to_user(user_id, plan_type, our_payment_id)
+                
+                if assigned_login:
+                    # Notificar o usuário via Telegram
+                    from bot import bot  # Importação local para evitar importação circular
+                    
+                    bot.send_message(
+                        user_id,
+                        f"🎉 *Seu login UniTV está pronto!* 🎉\n\n"
+                        f"Login: `{assigned_login}`\n\n"
+                        f"Seu plano expira em {PLANS[plan_type]['duration_days']} dias.\n"
+                        f"Aproveite sua assinatura UniTV! 📺✨",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Registrar a entrega automática
+                    logger.info(f"Login {assigned_login} automatically delivered to user {user_id}")
+                    
+                    # Se um cupom foi usado, marcar como usado
+                    if our_payment.get('coupon_code'):
+                        use_coupon(our_payment.get('coupon_code'), user_id)
+                else:
+                    logger.error(f"Failed to assign login for payment {our_payment_id}")
+            else:
+                # Sem login disponível
+                logger.warning(f"No available login for plan {plan_type} after payment {our_payment_id}")
+                
+                # Notificar o usuário
+                from bot import bot
+                
+                bot.send_message(
+                    user_id,
+                    f"✅ *Pagamento Aprovado!* ✅\n\n"
+                    f"Seu pagamento para o plano {PLANS[plan_type]['name']} foi aprovado!\n\n"
+                    f"Estamos preparando seu login e você o receberá automaticamente em breve.\n"
+                    f"Obrigado pela paciência!",
+                    parse_mode="Markdown"
+                )
+                
+                # Notificar o administrador
+                bot.send_message(
+                    ADMIN_ID,
+                    f"⚠️ *Pagamento Aprovado via Mercado Pago, mas Sem Login Disponível* ⚠️\n\n"
+                    f"ID do Pagamento: {our_payment_id}\n"
+                    f"Usuário: {user_id}\n"
+                    f"Plano: {PLANS[plan_type]['name']}\n\n"
+                    f"Por favor, adicione novos logins usando /addlogin e o login será enviado automaticamente ao usuário.",
+                    parse_mode="Markdown"
+                )
+            
+            return jsonify({"status": "success", "message": "Payment processed successfully"}), 200
+        
+        logger.info(f"Payment {mp_payment_id} status is {payment_status}, no action taken")
+        return jsonify({"status": "success", "message": "Notification received"}), 200
+    
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Error processing Mercado Pago webhook: {e}")
+        return jsonify({"status": "error", "message": "Internal server error"}), 500
+
 # Error handlers
 @app.errorhandler(404)
 def page_not_found(e):
