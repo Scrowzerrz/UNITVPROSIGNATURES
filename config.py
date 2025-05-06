@@ -1,15 +1,11 @@
 import os
 import json
+import secrets
 from datetime import datetime
 
 # Bot configuration
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_TELEGRAM_ID', '0'))
-ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-
-# Admin panel credentials
-ADMIN_PANEL_USERNAME = os.getenv('ADMIN_PANEL_USERNAME', 'admin')
-ADMIN_PANEL_PASSWORD = os.getenv('ADMIN_PANEL_PASSWORD', 'admin123')
 
 # File paths
 DATA_DIR = 'data'
@@ -17,6 +13,11 @@ USERS_FILE = f'{DATA_DIR}/users.json'
 PAYMENTS_FILE = f'{DATA_DIR}/payments.json'
 LOGINS_FILE = f'{DATA_DIR}/logins.json'
 BOT_CONFIG_FILE = f'{DATA_DIR}/bot_config.json'
+AUTH_FILE = f'{DATA_DIR}/auth.json'
+SESSION_FILE = f'{DATA_DIR}/sessions.json'
+
+# Session configurations
+SESSION_EXPIRY_HOURS = 24
 
 # Ensure data directory exists
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -82,6 +83,20 @@ def init_json_files():
         }
         with open(BOT_CONFIG_FILE, 'w') as f:
             json.dump(default_config, f, indent=4)
+    
+    # Create auth.json if it doesn't exist (stores admin Telegram IDs)
+    if not os.path.exists(AUTH_FILE):
+        auth_config = {
+            'admin_telegram_ids': [ADMIN_ID] if ADMIN_ID else [],
+            'allowed_telegram_ids': []  # Telegram IDs allowed to access the admin panel
+        }
+        with open(AUTH_FILE, 'w') as f:
+            json.dump(auth_config, f, indent=4)
+    
+    # Create sessions.json if it doesn't exist (stores active login sessions)
+    if not os.path.exists(SESSION_FILE):
+        with open(SESSION_FILE, 'w') as f:
+            json.dump({}, f)
 
 # Initialize the files
 init_json_files()

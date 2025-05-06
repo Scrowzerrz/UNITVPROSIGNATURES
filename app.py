@@ -1,18 +1,19 @@
 import os
 import json
 import logging
-from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+import secrets
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from config import (
-    ADMIN_PANEL_USERNAME, ADMIN_PANEL_PASSWORD, 
-    USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE,
-    PLANS
+    USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, SESSION_FILE,
+    PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
 )
 from utils import (
     read_json_file, write_json_file, add_login, add_coupon, delete_coupon,
-    resume_sales, suspend_sales, sales_enabled, format_currency
+    resume_sales, suspend_sales, sales_enabled, format_currency, create_auth_token, verify_auth_token,
+    is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session
 )
 
 # Configure logging
@@ -41,26 +42,49 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        
-        if username == ADMIN_PANEL_USERNAME and password == ADMIN_PANEL_PASSWORD:
-            session['logged_in'] = True
-            session['username'] = username
-            flash('Login successful!', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
-        else:
-            flash('Invalid username or password', 'danger')
+    # Check if already logged in
+    if 'logged_in' in session:
+        return redirect(url_for('dashboard'))
     
+    # Check if it's a token verification
+    telegram_id = request.args.get('id')
+    token = request.args.get('token')
+    
+    # If telegram_id and token are provided, verify
+    if telegram_id and token:
+        if verify_auth_token(telegram_id, token):
+            # Create a new session for the user
+            if is_allowed_telegram_id(telegram_id):
+                session_token = create_session(telegram_id)
+                session['logged_in'] = True
+                session['session_token'] = session_token
+                session['telegram_id'] = telegram_id
+                
+                flash('Login successful! Authenticated via Telegram.', 'success')
+                next_page = request.args.get('next')
+                return redirect(next_page or url_for('dashboard'))
+            else:
+                flash('Seu ID do Telegram não tem permissão para acessar o painel administrativo.', 'danger')
+                return render_template('login.html')
+        else:
+            flash('Token de autenticação inválido ou expirado.', 'danger')
+            return render_template('login.html')
+    
+    # If this is a GET request or authentication failed, show login page
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
+    # Delete session token if exists
+    if 'session_token' in session:
+        delete_session(session['session_token'])
+    
+    # Clear all session data
     session.pop('logged_in', None)
-    session.pop('username', None)
-    flash('You have been logged out', 'success')
+    session.pop('session_token', None)
+    session.pop('telegram_id', None)
+    
+    flash('Você saiu com sucesso. Para acessar novamente, use o bot do Telegram.', 'success')
     return redirect(url_for('login'))
 
 @app.route('/dashboard')

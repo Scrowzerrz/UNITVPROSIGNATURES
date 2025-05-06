@@ -3,10 +3,12 @@ import uuid
 import time
 import logging
 import os
+import secrets
+import hashlib
 from datetime import datetime, timedelta
 from config import (
-    USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE,
-    PLANS, ADMIN_ID
+    USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, SESSION_FILE,
+    PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
 )
 
 # Configure logging
@@ -435,3 +437,162 @@ def apply_referral_discount(user_id, amount):
         return final_amount, True
     
     return amount, False
+
+# Telegram Authentication Functions
+def is_admin_telegram_id(telegram_id):
+    """Check if a Telegram ID is an admin"""
+    auth_data = read_json_file(AUTH_FILE)
+    return str(telegram_id) in auth_data.get('admin_telegram_ids', [])
+
+def is_allowed_telegram_id(telegram_id):
+    """Check if a Telegram ID is allowed to access the admin panel"""
+    auth_data = read_json_file(AUTH_FILE)
+    return (str(telegram_id) in auth_data.get('allowed_telegram_ids', []) or 
+            is_admin_telegram_id(telegram_id))
+
+def add_allowed_telegram_id(telegram_id):
+    """Add a Telegram ID to the allowed list"""
+    auth_data = read_json_file(AUTH_FILE)
+    telegram_id = str(telegram_id)
+    
+    if 'allowed_telegram_ids' not in auth_data:
+        auth_data['allowed_telegram_ids'] = []
+    
+    if telegram_id not in auth_data['allowed_telegram_ids']:
+        auth_data['allowed_telegram_ids'].append(telegram_id)
+        write_json_file(AUTH_FILE, auth_data)
+        return True
+    
+    return False
+
+def remove_allowed_telegram_id(telegram_id):
+    """Remove a Telegram ID from the allowed list"""
+    auth_data = read_json_file(AUTH_FILE)
+    telegram_id = str(telegram_id)
+    
+    if 'allowed_telegram_ids' in auth_data and telegram_id in auth_data['allowed_telegram_ids']:
+        auth_data['allowed_telegram_ids'].remove(telegram_id)
+        write_json_file(AUTH_FILE, auth_data)
+        return True
+    
+    return False
+
+# Session Management Functions
+def create_session(telegram_id, user_data=None):
+    """Create a new session for a user"""
+    session_token = secrets.token_hex(32)
+    sessions = read_json_file(SESSION_FILE)
+    
+    if not user_data:
+        user = get_user(telegram_id)
+        user_data = {
+            'first_name': user.get('first_name', 'Unknown'),
+            'username': user.get('username', 'Unknown')
+        }
+    
+    # Create session
+    sessions[session_token] = {
+        'telegram_id': str(telegram_id),
+        'created_at': datetime.now().isoformat(),
+        'expires_at': (datetime.now() + timedelta(hours=SESSION_EXPIRY_HOURS)).isoformat(),
+        'user_data': user_data
+    }
+    
+    write_json_file(SESSION_FILE, sessions)
+    return session_token
+
+def get_session(session_token):
+    """Get a session by token"""
+    sessions = read_json_file(SESSION_FILE)
+    session = sessions.get(session_token)
+    
+    if not session:
+        return None
+    
+    # Check if session is expired
+    expires_at = datetime.fromisoformat(session['expires_at'])
+    if datetime.now() > expires_at:
+        delete_session(session_token)
+        return None
+    
+    return session
+
+def delete_session(session_token):
+    """Delete a session"""
+    sessions = read_json_file(SESSION_FILE)
+    if session_token in sessions:
+        del sessions[session_token]
+        write_json_file(SESSION_FILE, sessions)
+        return True
+    
+    return False
+
+def clean_expired_sessions():
+    """Remove all expired sessions"""
+    sessions = read_json_file(SESSION_FILE)
+    now = datetime.now()
+    
+    session_tokens_to_delete = []
+    for token, session in sessions.items():
+        expires_at = datetime.fromisoformat(session['expires_at'])
+        if now > expires_at:
+            session_tokens_to_delete.append(token)
+    
+    for token in session_tokens_to_delete:
+        del sessions[token]
+    
+    if session_tokens_to_delete:
+        write_json_file(SESSION_FILE, sessions)
+    
+    return len(session_tokens_to_delete)
+
+# Authentication token functions
+def create_auth_token(telegram_id):
+    """Create a one-time authentication token for a Telegram user"""
+    # Generate a secure random token
+    token = secrets.token_hex(16)
+    
+    # Create hash of the token to store
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    
+    # Get current user data
+    user = get_user(telegram_id)
+    
+    if user:
+        # Update user with token hash and expiration
+        user['auth_token'] = {
+            'hash': token_hash,
+            'expires_at': (datetime.now() + timedelta(minutes=10)).isoformat()
+        }
+        save_user(telegram_id, user)
+        
+        return token
+    
+    return None
+
+def verify_auth_token(telegram_id, token):
+    """Verify a one-time authentication token"""
+    user = get_user(telegram_id)
+    
+    if not user or 'auth_token' not in user:
+        return False
+    
+    token_data = user['auth_token']
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    
+    # Check if token has expired
+    expires_at = datetime.fromisoformat(token_data['expires_at'])
+    if datetime.now() > expires_at:
+        # Clear expired token
+        user.pop('auth_token', None)
+        save_user(telegram_id, user)
+        return False
+    
+    # Check if token hash matches
+    if token_hash == token_data['hash']:
+        # Clear used token
+        user.pop('auth_token', None)
+        save_user(telegram_id, user)
+        return True
+    
+    return False

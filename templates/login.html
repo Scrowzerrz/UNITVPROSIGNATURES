@@ -32,29 +32,20 @@
                     {% endif %}
                 {% endwith %}
                 
-                <form method="POST" action="{{ url_for('login') }}">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">Usuário</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-user"></i></span>
-                            <input type="text" class="form-control" id="username" name="username" placeholder="Digite seu usuário" required autofocus>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <label for="password" class="form-label">Senha</label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                            <input type="password" class="form-control" id="password" name="password" placeholder="Digite sua senha" required>
-                        </div>
-                    </div>
-                    
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-sign-in-alt me-2"></i> Entrar
-                        </button>
-                    </div>
-                </form>
+                <div class="alert alert-info">
+                    <h4 class="alert-heading"><i class="fab fa-telegram text-primary"></i> Login via Telegram</h4>
+                    <p>O acesso ao painel administrativo agora é feito exclusivamente através do bot do Telegram.</p>
+                    <hr>
+                    <ol class="mb-0">
+                        <li>Acesse o nosso bot no Telegram: <a href="https://t.me/UniTVBot" target="_blank">@UniTVBot</a></li>
+                        <li>Envie o comando <code>/admin_login</code></li>
+                        <li>Clique no link que você receberá para acessar o painel</li>
+                    </ol>
+                </div>
+                
+                <div class="alert alert-secondary">
+                    <p class="mb-0"><i class="fas fa-info-circle"></i> Se você não tem acesso, solicite ao administrador que adicione seu ID do Telegram usando o comando <code>/add_user</code> no bot.</p>
+                </div>
             </div>
         </div>
         

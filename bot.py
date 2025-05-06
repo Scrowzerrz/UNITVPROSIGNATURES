@@ -11,7 +11,7 @@ import uuid
 # Import from our modules
 from config import (
     BOT_TOKEN, ADMIN_ID, PLANS, USERS_FILE, PAYMENTS_FILE,
-    LOGINS_FILE, BOT_CONFIG_FILE
+    LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE
 )
 from utils import (
     get_user, create_user, save_user, create_payment, update_payment,
@@ -20,7 +20,9 @@ from utils import (
     format_currency, calculate_plan_price, get_available_login, add_login,
     assign_login_to_user, get_user_pending_payment, add_coupon, validate_coupon,
     use_coupon, delete_coupon, apply_referral_discount, process_successful_referral,
-    get_expiring_subscriptions, read_json_file, write_json_file
+    get_expiring_subscriptions, read_json_file, write_json_file,
+    create_auth_token, is_admin_telegram_id, is_allowed_telegram_id,
+    add_allowed_telegram_id, remove_allowed_telegram_id
 )
 
 # Configure logging
@@ -1962,6 +1964,143 @@ def confirm_delete_coupon(call):
             parse_mode="Markdown"
         )
 
+# Admin login command - generates auth token for the web interface
+@bot.message_handler(commands=['admin_login'])
+def admin_login_command(message):
+    user_id = message.from_user.id
+    
+    # Check if user is an admin or allowed user
+    if not is_admin_telegram_id(user_id) and not is_allowed_telegram_id(user_id):
+        bot.reply_to(
+            message,
+            "⛔ Você não tem permissão para acessar o painel administrativo."
+        )
+        return
+    
+    # Generate auth token
+    token = create_auth_token(user_id)
+    
+    if token:
+        # Get the host from environment or use a default
+        base_url = os.environ.get('HOST_URL', 'http://localhost:5000')
+        login_url = f"{base_url}/login?id={user_id}&token={token}"
+        
+        # Send login link to user
+        bot.reply_to(
+            message,
+            f"🔐 *Acesso ao Painel Administrativo* 🔐\n\n"
+            f"Clique no link abaixo para fazer login (válido por 10 minutos):\n\n"
+            f"[Fazer Login no Painel Admin]({login_url})",
+            parse_mode="Markdown"
+        )
+    else:
+        bot.reply_to(
+            message, 
+            "❌ Erro ao gerar token de acesso. Tente novamente."
+        )
+
+# Admin commands to manage allowed users
+@bot.message_handler(commands=['add_admin'])
+def add_admin_command(message):
+    user_id = message.from_user.id
+    
+    # Only existing admin can add new admins
+    if not is_admin_telegram_id(user_id):
+        bot.reply_to(
+            message,
+            "⛔ Apenas administradores podem adicionar novos administradores."
+        )
+        return
+    
+    # Check if there's an ID in the message
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit():
+        bot.reply_to(
+            message,
+            "❌ Uso incorreto. Envie `/add_admin ID_DO_TELEGRAM` para adicionar um novo administrador.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    new_admin_id = args[1]
+    
+    # Add user to the allowed list
+    auth_data = read_json_file(AUTH_FILE)
+    
+    if 'admin_telegram_ids' not in auth_data:
+        auth_data['admin_telegram_ids'] = []
+    
+    if str(new_admin_id) not in auth_data['admin_telegram_ids']:
+        auth_data['admin_telegram_ids'].append(str(new_admin_id))
+        write_json_file(AUTH_FILE, auth_data)
+        
+        bot.reply_to(
+            message,
+            f"✅ Administrador (ID: {new_admin_id}) adicionado com sucesso!"
+        )
+        
+        # Notify the new admin
+        try:
+            bot.send_message(
+                new_admin_id,
+                f"🎉 Você agora é um administrador do sistema UniTV!\n\n"
+                f"Use o comando /admin_login para acessar o painel administrativo."
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify new admin: {e}")
+    else:
+        bot.reply_to(
+            message,
+            f"⚠️ Este usuário (ID: {new_admin_id}) já é um administrador."
+        )
+
+# Add allowed user (not admin)
+@bot.message_handler(commands=['add_user'])
+def add_allowed_user_command(message):
+    user_id = message.from_user.id
+    
+    # Only existing admin can add new allowed users
+    if not is_admin_telegram_id(user_id):
+        bot.reply_to(
+            message,
+            "⛔ Apenas administradores podem adicionar novos usuários permitidos."
+        )
+        return
+    
+    # Check if there's an ID in the message
+    args = message.text.split()
+    if len(args) != 2 or not args[1].isdigit():
+        bot.reply_to(
+            message,
+            "❌ Uso incorreto. Envie `/add_user ID_DO_TELEGRAM` para adicionar um novo usuário permitido.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    new_user_id = args[1]
+    
+    # Add user to the allowed list
+    if add_allowed_telegram_id(new_user_id):
+        bot.reply_to(
+            message,
+            f"✅ Usuário (ID: {new_user_id}) adicionado com sucesso à lista de usuários permitidos!"
+        )
+        
+        # Notify the new user
+        try:
+            bot.send_message(
+                new_user_id,
+                f"🎉 Você agora tem acesso ao painel administrativo do sistema UniTV!\n\n"
+                f"Use o comando /admin_login para acessar."
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify new allowed user: {e}")
+    else:
+        bot.reply_to(
+            message,
+            f"⚠️ Este usuário (ID: {new_user_id}) já está na lista de usuários permitidos."
+        )
+
 # Back to start
 @bot.callback_query_handler(func=lambda call: call.data == "start")
 def back_to_start(call):
@@ -1969,6 +2108,7 @@ def back_to_start(call):
 
 # Main function to start bot
 def run_bot():
+    logger.info("Starting Telegram bot...")
     start_background_tasks()
     bot.infinity_polling()
 
