@@ -25,5 +25,23 @@
             "first_name": "Scrowzer",
             "username": "scrowzer"
         }
+    },
+    "e52884bc8450fcd958d26fac017ea99adcd0babdd7d771bebf6382177db5d32f": {
+        "telegram_id": "6067681666",
+        "created_at": "2025-05-06T17:21:22.208054",
+        "expires_at": "2025-05-07T17:21:22.208059",
+        "user_data": {
+            "first_name": "Scrowzer",
+            "username": "scrowzer"
+        }
+    },
+    "eb2fb7450332613f77ceace05eaaf3de2f8825bccb0f5bd813b837cc88f6fdf9": {
+        "telegram_id": "6067681666",
+        "created_at": "2025-05-06T17:21:58.077275",
+        "expires_at": "2025-05-07T17:21:58.077279",
+        "user_data": {
+            "first_name": "Scrowzer",
+            "username": "scrowzer"
+        }
     }
 }
