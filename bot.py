@@ -22,7 +22,7 @@ from utils import (
     use_coupon, delete_coupon, apply_referral_discount, process_successful_referral,
     get_expiring_subscriptions, read_json_file, write_json_file,
     create_auth_token, is_admin_telegram_id, is_allowed_telegram_id,
-    add_allowed_telegram_id, remove_allowed_telegram_id
+    add_allowed_telegram_id, remove_allowed_telegram_id, generate_access_code
 )
 
 # Configure logging
@@ -1964,7 +1964,7 @@ def confirm_delete_coupon(call):
             parse_mode="Markdown"
         )
 
-# Admin login command - generates auth token for the web interface
+# Admin login command - generates access code for the admin panel
 @bot.message_handler(commands=['admin_login'])
 def admin_login_command(message):
     user_id = message.from_user.id
@@ -1977,26 +1977,31 @@ def admin_login_command(message):
         )
         return
     
-    # Generate auth token
-    token = create_auth_token(user_id)
-    
-    if token:
+    try:
+        # Generate an access code (valid for 24 hours)
+        access_code = generate_access_code(user_id, expiration_hours=24)
+        
         # Get the host from environment or use a default
         base_url = os.environ.get('HOST_URL', 'http://localhost:5000')
-        login_url = f"{base_url}/login?id={user_id}&token={token}"
+        login_url = f"{base_url}/login"
         
-        # Send login link to user
+        # Send access code to user
         bot.reply_to(
             message,
             f"🔐 *Acesso ao Painel Administrativo* 🔐\n\n"
-            f"Clique no link abaixo para fazer login (válido por 10 minutos):\n\n"
-            f"[Fazer Login no Painel Admin]({login_url})",
+            f"Seu código de acesso é:\n\n"
+            f"`{access_code}`\n\n"
+            f"Este código é válido por 24 horas e pode ser usado apenas uma vez.\n\n"
+            f"Para fazer login, acesse: {login_url}\n"
+            f"E insira seu ID do Telegram ({user_id}) e o código de acesso acima.\n\n"
+            f"⚠️ *Importante*: Guarde este código ou salve esta mensagem para utilizá-lo quando necessário.",
             parse_mode="Markdown"
         )
-    else:
+    except Exception as e:
+        logger.error(f"Error generating access code: {e}")
         bot.reply_to(
             message, 
-            "❌ Erro ao gerar token de acesso. Tente novamente."
+            "❌ Erro ao gerar código de acesso. Tente novamente."
         )
 
 # Admin commands to manage allowed users

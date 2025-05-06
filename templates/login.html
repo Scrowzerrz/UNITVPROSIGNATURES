@@ -32,20 +32,42 @@
                     {% endif %}
                 {% endwith %}
                 
-                <div class="alert alert-info">
-                    <h4 class="alert-heading"><i class="fab fa-telegram text-primary"></i> Login via Telegram</h4>
-                    <p>O acesso ao painel administrativo agora é feito exclusivamente através do bot do Telegram.</p>
-                    <hr>
-                    <ol class="mb-0">
-                        <li>Acesse o nosso bot no Telegram: <a href="https://t.me/UniTVBot" target="_blank">@UniTVBot</a></li>
-                        <li>Envie o comando <code>/admin_login</code></li>
-                        <li>Clique no link que você receberá para acessar o painel</li>
-                    </ol>
-                </div>
-                
-                <div class="alert alert-secondary">
-                    <p class="mb-0"><i class="fas fa-info-circle"></i> Se você não tem acesso, solicite ao administrador que adicione seu ID do Telegram usando o comando <code>/add_user</code> no bot.</p>
-                </div>
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="alert alert-info mb-4">
+                        <h4 class="alert-heading"><i class="fab fa-telegram text-primary"></i> Acesso via ID do Telegram</h4>
+                        <p>O acesso ao painel administrativo agora é feito usando seu ID do Telegram e um código de acesso.</p>
+                        <hr>
+                        <p>Se você não conhece seu ID do Telegram, envie uma mensagem para o bot <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> para obtê-lo.</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="telegram_id" class="form-label">ID do Telegram</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fab fa-telegram"></i></span>
+                            <input type="text" class="form-control" id="telegram_id" name="telegram_id" placeholder="Digite seu ID do Telegram" required autofocus>
+                        </div>
+                        <div class="form-text">Ex: 123456789</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="access_code" class="form-label">Código de Acesso</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-key"></i></span>
+                            <input type="text" class="form-control" id="access_code" name="access_code" placeholder="Digite seu código de acesso" required>
+                        </div>
+                        <div class="form-text">Solicite um código de acesso ao administrador</div>
+                    </div>
+                    
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-sign-in-alt me-2"></i> Entrar
+                        </button>
+                    </div>
+                    
+                    <div class="alert alert-secondary">
+                        <p class="mb-0"><i class="fas fa-info-circle"></i> Se você não tem acesso, solicite ao administrador que crie um código de acesso para seu ID do Telegram.</p>
+                    </div>
+                </form>
             </div>
         </div>
         

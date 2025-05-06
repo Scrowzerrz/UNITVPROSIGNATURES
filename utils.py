@@ -673,3 +673,125 @@ def remove_allowed_telegram_id(telegram_id):
         return True
         
     return False
+
+# Access code functions for admin panel login
+def generate_access_code(telegram_id, expiration_hours=24):
+    """
+    Generate a unique access code for a Telegram ID
+    
+    This creates a 6-character alphanumeric code that can be used for login
+    This code is stored in the auth.json file and expires after a set time
+    """
+    # Generate a random 6-character code
+    code = ''.join(secrets.choice('ABCDEFGHJKLMNPQRSTUVWXYZ23456789') for _ in range(6))
+    
+    # Convert to string for storage
+    telegram_id = str(telegram_id)
+    
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Initialize access_codes dict if it doesn't exist
+    if 'access_codes' not in auth_data:
+        auth_data['access_codes'] = {}
+    
+    # Check if user already has previous codes and remove them
+    for existing_code in list(auth_data['access_codes'].keys()):
+        if auth_data['access_codes'][existing_code].get('telegram_id') == telegram_id:
+            del auth_data['access_codes'][existing_code]
+    
+    # Store the code with expiration time
+    auth_data['access_codes'][code] = {
+        'telegram_id': telegram_id,
+        'created_at': datetime.now().isoformat(),
+        'expires_at': (datetime.now() + timedelta(hours=expiration_hours)).isoformat()
+    }
+    
+    write_json_file(AUTH_FILE, auth_data)
+    
+    return code
+
+def verify_access_code(telegram_id, code):
+    """
+    Verify if an access code is valid for the given Telegram ID
+    
+    Returns True if the code is valid and not expired, False otherwise
+    """
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for comparison
+    telegram_id = str(telegram_id)
+    
+    # Check if access_codes exists
+    if 'access_codes' not in auth_data:
+        return False
+    
+    # Check if code exists
+    if code not in auth_data['access_codes']:
+        return False
+    
+    # Get code data
+    code_data = auth_data['access_codes'][code]
+    
+    # Check if telegram_id matches
+    if code_data.get('telegram_id') != telegram_id:
+        return False
+    
+    # Check if code is expired
+    expires_at = datetime.fromisoformat(code_data['expires_at'])
+    if datetime.now() > expires_at:
+        # Remove expired code
+        del auth_data['access_codes'][code]
+        write_json_file(AUTH_FILE, auth_data)
+        return False
+    
+    # Valid code - remove it after use (one-time use)
+    del auth_data['access_codes'][code]
+    write_json_file(AUTH_FILE, auth_data)
+    
+    return True
+
+def list_active_access_codes():
+    """
+    List all active access codes
+    
+    Returns a dictionary with code -> user info mapping
+    Removes expired codes in the process
+    """
+    auth_data = read_json_file(AUTH_FILE)
+    
+    if 'access_codes' not in auth_data:
+        auth_data['access_codes'] = {}
+        return {}
+    
+    # Check for expired codes and remove them
+    now = datetime.now()
+    codes_to_remove = []
+    
+    for code, code_data in auth_data['access_codes'].items():
+        expires_at = datetime.fromisoformat(code_data['expires_at'])
+        if now > expires_at:
+            codes_to_remove.append(code)
+    
+    # Remove expired codes
+    for code in codes_to_remove:
+        del auth_data['access_codes'][code]
+    
+    # If we removed any codes, update the file
+    if codes_to_remove:
+        write_json_file(AUTH_FILE, auth_data)
+    
+    # Return active codes
+    active_codes = {}
+    for code, code_data in auth_data['access_codes'].items():
+        # Get user info
+        user = get_user(code_data['telegram_id'])
+        username = user.get('username', 'Unknown') if user else 'Unknown'
+        
+        active_codes[code] = {
+            'telegram_id': code_data['telegram_id'],
+            'username': username,
+            'created_at': code_data['created_at'],
+            'expires_at': code_data['expires_at']
+        }
+    
+    return active_codes

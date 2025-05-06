@@ -13,7 +13,8 @@ from config import (
 from utils import (
     read_json_file, write_json_file, add_login, add_coupon, delete_coupon,
     resume_sales, suspend_sales, sales_enabled, format_currency, create_auth_token, verify_auth_token,
-    is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session
+    is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session,
+    generate_access_code, verify_access_code, list_active_access_codes
 )
 
 # Configure logging
@@ -71,29 +72,32 @@ def login():
     if 'logged_in' in session:
         return redirect(url_for('dashboard'))
     
-    # Check if it's a token verification
-    telegram_id = request.args.get('id')
-    token = request.args.get('token')
-    
-    # If telegram_id and token are provided, verify
-    if telegram_id and token:
-        if verify_auth_token(telegram_id, token):
-            # Create a new session for the user
+    # Handle the POST request (form submission with ID and access code)
+    if request.method == 'POST':
+        telegram_id = request.form.get('telegram_id')
+        access_code = request.form.get('access_code')
+        
+        if not telegram_id or not access_code:
+            flash('Por favor, preencha o ID do Telegram e o código de acesso.', 'warning')
+            return render_template('login.html')
+            
+        # Verify access code for this telegram ID
+        if verify_access_code(telegram_id, access_code):
+            # Check if user is allowed
             if is_allowed_telegram_id(telegram_id):
+                # Create new session
                 session_token = create_session(telegram_id)
                 session['logged_in'] = True
                 session['session_token'] = session_token
                 session['telegram_id'] = telegram_id
                 
-                flash('Login successful! Authenticated via Telegram.', 'success')
+                flash('Login realizado com sucesso!', 'success')
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('dashboard'))
             else:
                 flash('Seu ID do Telegram não tem permissão para acessar o painel administrativo.', 'danger')
-                return render_template('login.html')
         else:
-            flash('Token de autenticação inválido ou expirado.', 'danger')
-            return render_template('login.html')
+            flash('Código de acesso inválido ou expirado.', 'danger')
     
     # If this is a GET request or authentication failed, show login page
     return render_template('login.html')
