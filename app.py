@@ -28,8 +28,33 @@ app.secret_key = os.environ.get("SESSION_SECRET", "unitv_secret_key")
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Check if user is logged in
         if 'logged_in' not in session:
             return redirect(url_for('login', next=request.url))
+        
+        # Verify session token if available
+        if 'session_token' in session:
+            session_data = get_session(session['session_token'])
+            if not session_data:
+                # Session expired or invalid, clear session and redirect to login
+                session.clear()
+                flash('Sua sessão expirou. Por favor, faça login novamente.', 'warning')
+                return redirect(url_for('login', next=request.url))
+            
+            # Check if the user still has permission
+            telegram_id = session.get('telegram_id')
+            if telegram_id and not is_allowed_telegram_id(telegram_id):
+                # User no longer has permission
+                delete_session(session['session_token'])
+                session.clear()
+                flash('Você não tem mais permissão para acessar o painel administrativo.', 'danger')
+                return redirect(url_for('login'))
+        else:
+            # No session token found but logged_in is True (old session)
+            session.clear()
+            flash('Sessão inválida. Por favor, faça login novamente.', 'warning')
+            return redirect(url_for('login', next=request.url))
+            
         return f(*args, **kwargs)
     return decorated_function
 

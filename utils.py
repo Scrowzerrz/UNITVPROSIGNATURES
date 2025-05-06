@@ -596,3 +596,80 @@ def verify_auth_token(telegram_id, token):
         return True
     
     return False
+
+# Functions to check admin and allowed user status
+def is_admin_telegram_id(telegram_id):
+    """Check if a Telegram ID is an admin"""
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for comparison since JSON keys are strings
+    telegram_id = str(telegram_id)
+    
+    # Check primary admin ID from environment variable
+    if telegram_id == str(ADMIN_ID):
+        return True
+    
+    # Check admin list in auth.json
+    if 'admin_telegram_ids' in auth_data:
+        return telegram_id in auth_data['admin_telegram_ids']
+        
+    return False
+
+def is_allowed_telegram_id(telegram_id):
+    """Check if a Telegram ID is allowed to access the admin panel"""
+    # Admins always have access
+    if is_admin_telegram_id(telegram_id):
+        return True
+    
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for comparison since JSON keys are strings
+    telegram_id = str(telegram_id)
+    
+    # Check allowed user list
+    if 'allowed_telegram_ids' in auth_data:
+        return telegram_id in auth_data['allowed_telegram_ids']
+        
+    return False
+
+def add_allowed_telegram_id(telegram_id):
+    """Add a Telegram ID to the allowed list"""
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for storage consistency
+    telegram_id = str(telegram_id)
+    
+    # Check if it's already an admin
+    if is_admin_telegram_id(telegram_id):
+        return False
+    
+    # Ensure the allowed_telegram_ids list exists
+    if 'allowed_telegram_ids' not in auth_data:
+        auth_data['allowed_telegram_ids'] = []
+    
+    # Add to allowed list if not already there
+    if telegram_id not in auth_data['allowed_telegram_ids']:
+        auth_data['allowed_telegram_ids'].append(telegram_id)
+        write_json_file(AUTH_FILE, auth_data)
+        return True
+        
+    return False
+
+def remove_allowed_telegram_id(telegram_id):
+    """Remove a Telegram ID from the allowed list"""
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for consistency
+    telegram_id = str(telegram_id)
+    
+    # Cannot remove admins
+    if is_admin_telegram_id(telegram_id):
+        return False
+    
+    # Remove from allowed list if present
+    if 'allowed_telegram_ids' in auth_data and telegram_id in auth_data['allowed_telegram_ids']:
+        auth_data['allowed_telegram_ids'].remove(telegram_id)
+        write_json_file(AUTH_FILE, auth_data)
+        return True
+        
+    return False
