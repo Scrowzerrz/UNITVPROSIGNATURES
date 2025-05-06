@@ -133,6 +133,100 @@
                             </div>
                         </div>
                         
+                        <!-- Gerenciamento de Usuário -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">Gerenciamento de Usuário</h6>
+                                        {% if user.is_banned %}
+                                        <span class="badge bg-danger">Usuário Banido</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h6 class="mb-0">Gerenciamento de Plano</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        {% if user.has_active_plan %}
+                                                        <div class="alert alert-info">
+                                                            <strong>Plano atual:</strong> 
+                                                            {% if user.plan_type == '30_days' %}Plano 30 Dias
+                                                            {% elif user.plan_type == '6_months' %}Plano 6 Meses
+                                                            {% elif user.plan_type == '1_year' %}Plano 1 Ano
+                                                            {% endif %}
+                                                            <br>
+                                                            <strong>Expira em:</strong> {{ user.plan_expiration[:10] }}
+                                                        </div>
+                                                        <form action="{{ url_for('remove_plan', user_id=user_id) }}" method="post" class="mt-3">
+                                                            <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Tem certeza que deseja remover o plano deste usuário?')">
+                                                                <i class="fas fa-trash-alt me-1"></i> Remover Plano
+                                                            </button>
+                                                        </form>
+                                                        {% else %}
+                                                        <form action="{{ url_for('assign_plan', user_id=user_id) }}" method="post">
+                                                            <div class="mb-3">
+                                                                <label for="plan_type" class="form-label">Selecione o Plano</label>
+                                                                <select class="form-select" id="plan_type" name="plan_type" required>
+                                                                    {% for plan_id, plan in plans.items() %}
+                                                                    <option value="{{ plan_id }}">{{ plan.name }}</option>
+                                                                    {% endfor %}
+                                                                </select>
+                                                            </div>
+                                                            <div class="mb-3">
+                                                                <label for="duration_days" class="form-label">Duração Personalizada (dias)</label>
+                                                                <input type="number" class="form-control" id="duration_days" name="duration_days" placeholder="Deixe em branco para usar a duração padrão">
+                                                            </div>
+                                                            <button type="submit" class="btn btn-success w-100">
+                                                                <i class="fas fa-check-circle me-1"></i> Atribuir Plano
+                                                            </button>
+                                                        </form>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h6 class="mb-0">Controle de Acesso</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        {% if user.is_banned %}
+                                                        <div class="alert alert-danger">
+                                                            <strong>Usuário banido em:</strong> {{ user.banned_at[:16] }}
+                                                            {% if user.ban_reason %}
+                                                            <br>
+                                                            <strong>Motivo:</strong> {{ user.ban_reason }}
+                                                            {% endif %}
+                                                        </div>
+                                                        <form action="{{ url_for('unban_user_route', user_id=user_id) }}" method="post">
+                                                            <button type="submit" class="btn btn-success w-100">
+                                                                <i class="fas fa-user-check me-1"></i> Remover Banimento
+                                                            </button>
+                                                        </form>
+                                                        {% else %}
+                                                        <form action="{{ url_for('ban_user_route', user_id=user_id) }}" method="post">
+                                                            <div class="mb-3">
+                                                                <label for="ban_reason" class="form-label">Motivo do Banimento</label>
+                                                                <textarea class="form-control" id="ban_reason" name="ban_reason" rows="3" placeholder="Opcional: Informe o motivo do banimento"></textarea>
+                                                            </div>
+                                                            <button type="submit" class="btn btn-danger w-100" onclick="return confirm('Tem certeza que deseja banir este usuário? Isso removerá o plano atual dele.')">
+                                                                <i class="fas fa-user-slash me-1"></i> Banir Usuário
+                                                            </button>
+                                                        </form>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Referral Information -->
                         <div class="row mb-4">
                             <div class="col-12">

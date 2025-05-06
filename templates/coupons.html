@@ -169,6 +169,93 @@
                     </div>
                 </div>
                 
+                <!-- Seasonal Discounts -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold">Descontos Sazonais</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">Os descontos sazonais são aplicados automaticamente a todos os usuários e se aplicam a planos específicos ou a todos os planos.</p>
+                        
+                        <form action="{{ url_for('add_seasonal_discount_route') }}" method="POST" class="mb-4">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="discount_percent" class="form-label">Percentual de Desconto (%)</label>
+                                    <input type="number" min="1" max="100" class="form-control" id="discount_percent" name="discount_percent" placeholder="Ex: 20" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="expiration_days" class="form-label">Dias para Expiração</label>
+                                    <input type="number" min="1" class="form-control" id="expiration_days" name="expiration_days" placeholder="Ex: 30" required>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label class="form-label">Planos Aplicáveis</label>
+                                    <div>
+                                        {% for plan_id, plan in plans.items() %}
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="checkbox" id="plan_{{ plan_id }}_seasonal" name="applicable_plans" value="{{ plan_id }}">
+                                            <label class="form-check-label" for="plan_{{ plan_id }}_seasonal">
+                                                {{ plan.name }}
+                                            </label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    <small class="text-muted">Se nenhum for selecionado, aplica-se a todos os planos</small>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-percentage me-1"></i> Adicionar Desconto Sazonal
+                            </button>
+                        </form>
+                        
+                        <hr>
+                        
+                        <!-- List of active seasonal discounts -->
+                        <h5 class="mb-3">Descontos Sazonais Ativos</h5>
+                        {% if seasonal_discounts %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="seasonalDiscountsTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Desconto</th>
+                                        <th>Expira em</th>
+                                        <th>Dias Restantes</th>
+                                        <th>Planos Aplicáveis</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for discount_id, discount in seasonal_discounts.items() %}
+                                    <tr>
+                                        <td>{{ discount_id[:8] }}...</td>
+                                        <td><strong>{{ discount.discount_percent }}%</strong></td>
+                                        <td>{{ discount.expiration_formatted }}</td>
+                                        <td>
+                                            {% if discount.days_left > 0 %}
+                                            <span class="badge bg-success">{{ discount.days_left }} dias</span>
+                                            {% else %}
+                                            <span class="badge bg-danger">Expirando hoje</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ discount.plans_formatted }}</td>
+                                        <td>
+                                            <form action="{{ url_for('remove_seasonal_discount_route', discount_id=discount_id) }}" method="POST" class="d-inline">
+                                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja remover este desconto sazonal?')">
+                                                    <i class="fas fa-trash"></i> Remover
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-center text-muted">Não há descontos sazonais ativos no momento.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
                 <!-- Active Coupons -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
@@ -252,24 +339,30 @@
     
     <script>
         $(document).ready(function() {
-            // Initialize DataTable
-            if ($('#couponsTable').length) {
-                $('#couponsTable').DataTable({
-                    language: {
-                        search: "Buscar:",
-                        lengthMenu: "Mostrar _MENU_ registros por página",
-                        zeroRecords: "Nenhum registro encontrado",
-                        info: "Mostrando _PAGE_ de _PAGES_",
-                        infoEmpty: "Nenhum registro disponível",
-                        infoFiltered: "(filtrado de _MAX_ registros totais)",
-                        paginate: {
-                            first: "Primeiro",
-                            last: "Último",
-                            next: "Próximo",
-                            previous: "Anterior"
-                        }
+            // Initialize DataTables
+            const dataTableConfig = {
+                language: {
+                    search: "Buscar:",
+                    lengthMenu: "Mostrar _MENU_ registros por página",
+                    zeroRecords: "Nenhum registro encontrado",
+                    info: "Mostrando _PAGE_ de _PAGES_",
+                    infoEmpty: "Nenhum registro disponível",
+                    infoFiltered: "(filtrado de _MAX_ registros totais)",
+                    paginate: {
+                        first: "Primeiro",
+                        last: "Último",
+                        next: "Próximo",
+                        previous: "Anterior"
                     }
-                });
+                }
+            };
+            
+            if ($('#couponsTable').length) {
+                $('#couponsTable').DataTable(dataTableConfig);
+            }
+            
+            if ($('#seasonalDiscountsTable').length) {
+                $('#seasonalDiscountsTable').DataTable(dataTableConfig);
             }
             
             // Handle "All plans" checkbox
