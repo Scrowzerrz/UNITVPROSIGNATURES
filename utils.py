@@ -484,11 +484,19 @@ def create_session(telegram_id, user_data=None):
     sessions = read_json_file(SESSION_FILE)
     
     if not user_data:
+        # Verificar se o usuário existe, se não, criar dados básicos
         user = get_user(telegram_id)
-        user_data = {
-            'first_name': user.get('first_name', 'Unknown'),
-            'username': user.get('username', 'Unknown')
-        }
+        if user:
+            user_data = {
+                'first_name': user.get('first_name', 'Unknown'),
+                'username': user.get('username', 'Unknown')
+            }
+        else:
+            # Usuário não encontrado, usar dados básicos
+            user_data = {
+                'first_name': 'Admin',
+                'username': f'User{telegram_id}'
+            }
     
     # Create session
     sessions[session_token] = {

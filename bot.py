@@ -1982,7 +1982,7 @@ def admin_login_command(message):
         access_code = generate_access_code(user_id, expiration_hours=24)
         
         # Get the host from environment or use a default
-        base_url = os.environ.get('HOST_URL', 'http://localhost:5000')
+        base_url = os.environ.get('HOST_URL', '')
         login_url = f"{base_url}/login"
         
         # Send access code to user
