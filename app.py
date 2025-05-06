@@ -21,6 +21,16 @@ from utils import (
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Adicionar logs detalhados para depuração
+import sys
+import traceback
+
+def log_exception(e):
+    """Log a detailed exception message"""
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    tb_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
+    logger.error("Exception details: %s", ''.join(tb_lines))
+
 # Initialize Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "unitv_secret_key")
@@ -68,47 +78,67 @@ def index():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # Check if already logged in
-    if 'logged_in' in session:
-        return redirect(url_for('dashboard'))
-    
-    # Handle the POST request (form submission with ID and access code)
-    if request.method == 'POST':
-        telegram_id = request.form.get('telegram_id')
-        access_code = request.form.get('access_code')
+    try:
+        # Check if already logged in
+        if 'logged_in' in session:
+            return redirect(url_for('dashboard'))
         
-        if not telegram_id or not access_code:
-            flash('Por favor, preencha o ID do Telegram e o código de acesso.', 'warning')
-            return render_template('login.html')
+        # Handle the POST request (form submission with ID and access code)
+        if request.method == 'POST':
+            telegram_id = request.form.get('telegram_id')
+            access_code = request.form.get('access_code')
             
-        # Verify access code for this telegram ID
-        if verify_access_code(telegram_id, access_code):
-            # Check if user is admin or allowed
-            if is_admin_telegram_id(telegram_id) or is_allowed_telegram_id(telegram_id):
-                # Create new session
-                session_token = create_session(telegram_id)
-                session['logged_in'] = True
-                session['session_token'] = session_token
-                session['telegram_id'] = telegram_id
+            logger.debug(f"Login attempt with Telegram ID: {telegram_id}, Access Code: {access_code}")
+            
+            if not telegram_id or not access_code:
+                flash('Por favor, preencha o ID do Telegram e o código de acesso.', 'warning')
+                return render_template('login.html')
                 
-                # Log the successful login
-                logger.info(f"Login successful for Telegram ID: {telegram_id}")
+            # Verify access code for this telegram ID
+            try:
+                is_valid = verify_access_code(telegram_id, access_code)
+                logger.debug(f"Access code validation result: {is_valid}")
                 
-                flash('Login realizado com sucesso!', 'success')
-                # Corrigido o redirecionamento para evitar problemas com o parâmetro next
-                next_page = request.args.get('next')
-                if next_page and next_page.startswith('/') and not next_page.startswith('//'):
-                    return redirect(next_page)
-                return redirect(url_for('dashboard'))
-            else:
-                # Log the unauthorized access attempt
-                logger.warning(f"Unauthorized access attempt from Telegram ID: {telegram_id}")
-                flash('Seu ID do Telegram não tem permissão para acessar o painel administrativo.', 'danger')
-        else:
-            flash('Código de acesso inválido ou expirado.', 'danger')
-    
-    # If this is a GET request or authentication failed, show login page
-    return render_template('login.html')
+                if is_valid:
+                    # Check if user is admin or allowed
+                    is_admin = is_admin_telegram_id(telegram_id)
+                    is_allowed = is_allowed_telegram_id(telegram_id)
+                    logger.debug(f"User permissions - Admin: {is_admin}, Allowed: {is_allowed}")
+                    
+                    if is_admin or is_allowed:
+                        # Create new session
+                        session_token = create_session(telegram_id)
+                        session['logged_in'] = True
+                        session['session_token'] = session_token
+                        session['telegram_id'] = telegram_id
+                        
+                        # Log the successful login
+                        logger.info(f"Login successful for Telegram ID: {telegram_id}")
+                        
+                        flash('Login realizado com sucesso!', 'success')
+                        # Corrigido o redirecionamento para evitar problemas com o parâmetro next
+                        next_page = request.args.get('next')
+                        if next_page and next_page.startswith('/') and not next_page.startswith('//'):
+                            return redirect(next_page)
+                        return redirect(url_for('dashboard'))
+                    else:
+                        # Log the unauthorized access attempt
+                        logger.warning(f"Unauthorized access attempt from Telegram ID: {telegram_id}")
+                        flash('Seu ID do Telegram não tem permissão para acessar o painel administrativo.', 'danger')
+                else:
+                    logger.warning(f"Invalid access code attempt: {access_code} for Telegram ID: {telegram_id}")
+                    flash('Código de acesso inválido ou expirado.', 'danger')
+            except Exception as e:
+                log_exception(e)
+                logger.error(f"Error during access code verification: {e}")
+                flash('Erro ao verificar o código de acesso. Tente novamente.', 'danger')
+        
+        # If this is a GET request or authentication failed, show login page
+        return render_template('login.html')
+    except Exception as e:
+        log_exception(e)
+        flash('Erro no processo de login. Por favor, tente novamente.', 'danger')
+        return render_template('login.html')
 
 @app.route('/logout')
 def logout():
@@ -127,111 +157,148 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    # Get data for dashboard
-    users = read_json_file(USERS_FILE)
-    payments = read_json_file(PAYMENTS_FILE)
-    logins = read_json_file(LOGINS_FILE)
-    bot_config = read_json_file(BOT_CONFIG_FILE)
-    
-    # Count active users
-    active_users = 0
-    for user_id, user_data in users.items():
-        if user_data.get('has_active_plan'):
-            active_users += 1
-    
-    # Count pending payments
-    pending_payments = 0
-    for payment_id, payment_data in payments.items():
-        if payment_data['status'] == 'pending_approval':
-            pending_payments += 1
-    
-    # Count available logins
-    available_logins = {
-        '30_days': len(logins.get('30_days', [])),
-        '6_months': len(logins.get('6_months', [])),
-        '1_year': len(logins.get('1_year', []))
-    }
-    
-    # Count total pending approvals
-    pending_approvals = 0
-    for payment_id, payment_data in payments.items():
-        if payment_data['status'] == 'pending_approval':
-            pending_approvals += 1
-    
-    # Count users waiting for logins
-    waiting_for_login = 0
-    for payment_id, payment_data in payments.items():
-        if payment_data['status'] == 'approved' and not payment_data.get('login_delivered'):
-            waiting_for_login += 1
-    
-    # Sales status
-    sales_status = bot_config.get('sales_enabled', True)
-    
-    # Coupons
-    active_coupons = len(bot_config.get('coupons', {}))
-    
-    stats = {
-        'total_users': len(users),
-        'active_users': active_users,
-        'pending_payments': pending_payments,
-        'available_logins': available_logins,
-        'pending_approvals': pending_approvals,
-        'waiting_for_login': waiting_for_login,
-        'sales_status': sales_status,
-        'active_coupons': active_coupons
-    }
-    
-    return render_template('dashboard.html', stats=stats)
+    try:
+        # Get data for dashboard
+        users = read_json_file(USERS_FILE) or {}
+        payments = read_json_file(PAYMENTS_FILE) or {}
+        logins = read_json_file(LOGINS_FILE) or {}
+        bot_config = read_json_file(BOT_CONFIG_FILE) or {}
+        
+        # Count active users
+        active_users = 0
+        for user_id, user_data in users.items():
+            if user_data and user_data.get('has_active_plan'):
+                active_users += 1
+        
+        # Count pending payments
+        pending_payments = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'pending_approval':
+                pending_payments += 1
+        
+        # Count available logins
+        available_logins = {
+            '30_days': len(logins.get('30_days', [])),
+            '6_months': len(logins.get('6_months', [])),
+            '1_year': len(logins.get('1_year', []))
+        }
+        
+        # Count total pending approvals
+        pending_approvals = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'pending_approval':
+                pending_approvals += 1
+        
+        # Count users waiting for logins
+        waiting_for_login = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'approved' and not payment_data.get('login_delivered'):
+                waiting_for_login += 1
+        
+        # Sales status
+        sales_status = bot_config.get('sales_enabled', True)
+        
+        # Coupons
+        coupons = bot_config.get('coupons', {})
+        active_coupons = len(coupons) if coupons else 0
+        
+        stats = {
+            'total_users': len(users),
+            'active_users': active_users,
+            'pending_payments': pending_payments,
+            'available_logins': available_logins,
+            'pending_approvals': pending_approvals,
+            'waiting_for_login': waiting_for_login,
+            'sales_status': sales_status,
+            'active_coupons': active_coupons
+        }
+        
+        logger.debug(f"Dashboard loaded with stats: {stats}")
+        return render_template('dashboard.html', stats=stats)
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao carregar o painel. Tente novamente.', 'danger')
+        return render_template('dashboard.html', stats={
+            'total_users': 0,
+            'active_users': 0,
+            'pending_payments': 0,
+            'available_logins': {'30_days': 0, '6_months': 0, '1_year': 0},
+            'pending_approvals': 0,
+            'waiting_for_login': 0,
+            'sales_status': True,
+            'active_coupons': 0
+        })
 
 @app.route('/users')
 @login_required
 def users():
-    users_data = read_json_file(USERS_FILE)
-    return render_template('users.html', users=users_data)
+    try:
+        users_data = read_json_file(USERS_FILE) or {}
+        return render_template('users.html', users=users_data)
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao carregar usuários. Tente novamente.', 'danger')
+        return render_template('users.html', users={})
 
 @app.route('/users/<user_id>')
 @login_required
 def user_detail(user_id):
-    users_data = read_json_file(USERS_FILE)
-    user = users_data.get(user_id)
-    
-    if not user:
-        flash('User not found', 'danger')
+    try:
+        users_data = read_json_file(USERS_FILE) or {}
+        user = users_data.get(user_id)
+        
+        if not user:
+            flash('Usuário não encontrado', 'danger')
+            return redirect(url_for('users'))
+        
+        # Find user's payments
+        payments_data = read_json_file(PAYMENTS_FILE) or {}
+        user_payments = []
+        
+        for payment_id, payment in payments_data.items():
+            if payment and payment.get('user_id') == user_id:
+                payment_copy = payment.copy()  # Criar uma cópia para não modificar o original
+                payment_copy['id'] = payment_id
+                user_payments.append(payment_copy)
+        
+        # Sort payments by date
+        if user_payments:
+            user_payments.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return render_template('users.html', user=user, user_id=user_id, payments=user_payments)
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao carregar detalhes do usuário. Tente novamente.', 'danger')
         return redirect(url_for('users'))
-    
-    # Find user's payments
-    payments_data = read_json_file(PAYMENTS_FILE)
-    user_payments = []
-    
-    for payment_id, payment in payments_data.items():
-        if payment['user_id'] == user_id:
-            payment['id'] = payment_id
-            user_payments.append(payment)
-    
-    # Sort payments by date
-    user_payments.sort(key=lambda x: x['created_at'], reverse=True)
-    
-    return render_template('users.html', user=user, user_id=user_id, payments=user_payments)
 
 @app.route('/payments')
 @login_required
 def payments():
-    payments_data = read_json_file(PAYMENTS_FILE)
-    users_data = read_json_file(USERS_FILE)
-    
-    # Add user info to payments
-    for payment_id, payment in payments_data.items():
-        user_id = payment['user_id']
-        user = users_data.get(user_id, {})
-        payment['username'] = user.get('username', 'Unknown')
-        payment['first_name'] = user.get('first_name', 'Unknown')
-        payment['id'] = payment_id
-    
-    # Convert to list and sort by date
-    payments_list = list(payments_data.values())
-    payments_list.sort(key=lambda x: x['created_at'], reverse=True)
-    
-    return render_template('payments.html', payments=payments_list)
+    try:
+        payments_data = read_json_file(PAYMENTS_FILE) or {}
+        users_data = read_json_file(USERS_FILE) or {}
+        
+        # Add user info to payments
+        payments_list = []
+        for payment_id, payment in payments_data.items():
+            if payment:
+                payment_copy = payment.copy()  # Criar uma cópia para não modificar o original
+                user_id = payment.get('user_id')
+                user = users_data.get(user_id, {})
+                payment_copy['username'] = user.get('username', 'Desconhecido')
+                payment_copy['first_name'] = user.get('first_name', 'Desconhecido')
+                payment_copy['id'] = payment_id
+                payments_list.append(payment_copy)
+        
+        # Sort by date
+        if payments_list:
+            payments_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return render_template('payments.html', payments=payments_list)
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao carregar pagamentos. Tente novamente.', 'danger')
+        return render_template('payments.html', payments=[])
 
 @app.route('/payments/approve/<payment_id>', methods=['POST'])
 @login_required
