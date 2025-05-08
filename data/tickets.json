@@ -1,5 +1,57 @@
 {
-    "active": {},
+    "active": {
+        "4": {
+            "id": "4",
+            "user_id": 6067681666,
+            "user_name": "Scrowzer None",
+            "username": "scrowzer",
+            "status": "open",
+            "created_at": "2025-05-08T22:32:52.903915",
+            "updated_at": "2025-05-08T22:35:18.651564",
+            "messages": [
+                {
+                    "id": "3f166d5f-1238-46a3-ad68-dd80f6b8f695",
+                    "from_id": 6067681666,
+                    "from_type": "user",
+                    "text": "Ghi9pknjpp",
+                    "timestamp": "2025-05-08T22:32:52.903915",
+                    "read": true
+                },
+                {
+                    "id": "e479e2ca-6bc5-4880-862c-f659f150c0e2",
+                    "from_id": "6067681666",
+                    "from_type": "admin",
+                    "text": "Bola gato",
+                    "timestamp": "2025-05-08T22:34:28.974203",
+                    "read": true
+                },
+                {
+                    "id": "11206e83-027b-4c10-9159-83b1b32a7a69",
+                    "from_id": 6067681666,
+                    "from_type": "user",
+                    "text": "Lonks",
+                    "timestamp": "2025-05-08T22:35:06.789848",
+                    "read": true
+                },
+                {
+                    "id": "3f92a088-a567-46de-b481-881f73f3c42c",
+                    "from_id": 6067681666,
+                    "from_type": "admin",
+                    "text": "Só",
+                    "timestamp": "2025-05-08T22:35:18.651564",
+                    "read": false
+                }
+            ],
+            "admin_notified": true,
+            "admin_replies": 2,
+            "user_replies": 2,
+            "message_tracking": {
+                "user_message_id": 884,
+                "admin_notification_6067681666_message_id": 885,
+                "admin_message_id": 886
+            }
+        }
+    },
     "closed": {
         "1": {
             "id": "1",
@@ -106,5 +158,5 @@
             "closed_by": "admin"
         }
     },
-    "current_id": 3
+    "current_id": 4
 }

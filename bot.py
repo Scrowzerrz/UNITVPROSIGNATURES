@@ -2892,6 +2892,45 @@ def notify_admins_about_ticket_reply(ticket_id, user_id, message_text):
     return notified_count > 0
 
 
+# Função para obter um ID de mensagem associado a um ticket
+def get_ticket_message_id(ticket_id, message_type):
+    """
+    Obtém o ID da mensagem do Telegram para um determinado ticket.
+    
+    Args:
+        ticket_id (str): ID do ticket
+        message_type (str): Tipo de mensagem ('user', 'admin', etc.)
+        
+    Returns:
+        int: ID da mensagem ou None se não encontrado
+    """
+    try:
+        from support import get_ticket_message_id as get_ticket_msg_id
+        return get_ticket_msg_id(ticket_id, message_type)
+    except Exception as e:
+        logger.error(f"Erro ao obter message_id para ticket {ticket_id}: {e}")
+        return None
+
+# Função para atualizar um ID de mensagem associado a um ticket
+def update_ticket_message_id(ticket_id, message_type, message_id):
+    """
+    Atualiza o ID da mensagem do Telegram para um determinado ticket.
+    
+    Args:
+        ticket_id (str): ID do ticket
+        message_type (str): Tipo de mensagem ('user', 'admin', etc.)
+        message_id (int): ID da mensagem no Telegram
+        
+    Returns:
+        bool: True se atualizado com sucesso, False caso contrário
+    """
+    try:
+        from support import update_ticket_message_id as update_ticket_msg_id
+        return update_ticket_msg_id(ticket_id, message_type, message_id)
+    except Exception as e:
+        logger.error(f"Erro ao atualizar message_id para ticket {ticket_id}: {e}")
+        return False
+
 # Tarefa em segundo plano para verificar tickets não lidos e notificar admin
 def check_support_tickets():
     logger.info("Iniciando thread de verificação de tickets de suporte")
@@ -2918,7 +2957,7 @@ def check_support_tickets():
                     
                     if last_user_message:
                         # Notificar admin sobre novo ticket ou resposta
-                        notify_admins_about_ticket_reply(ticket_id, user_id, last_user_message['text'])
+                        notify_admin_about_ticket_reply_simple(ticket_id, user_id, last_user_message['text'])
                         
                         # Marcar que admin foi notificado
                         mark_ticket_messages_as_read(ticket_id, 'admin')
