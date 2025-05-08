@@ -21,5 +21,16 @@
             "public_key": "APP_USR-6d31b63f-a284-43a1-be56-3e096be818a4"
         }
     },
-    "pending_payment_notified": true
+    "pending_payment_notified": true,
+    "seasonal_discounts": {
+        "a50b3fe6-7d42-4465-97e2-ce188b91a2f0": {
+            "discount_percent": 10,
+            "expiration_date": "2025-06-02T12:45:49.488946",
+            "applicable_plans": [
+                "6_months",
+                "1_year"
+            ],
+            "created_at": "2025-05-08T12:45:49.488955"
+        }
+    }
 }
