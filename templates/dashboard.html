@@ -200,6 +200,32 @@
                     </div>
                 </div>
                 
+                <!-- Support Ticket Card -->
+                <div class="row">
+                    <div class="col-md-6 col-xl-3 mb-4">
+                        <div class="card border-left-danger shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col-auto">
+                                        <i class="fas fa-headset fa-2x text-danger"></i>
+                                    </div>
+                                    <div class="col ml-3">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            Tickets não lidos
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold">{{ stats.unread_tickets }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-danger bg-opacity-10">
+                                <a href="{{ url_for('support_dashboard') }}" class="text-danger text-decoration-none">
+                                    <small>Ver tickets <i class="fas fa-arrow-right ms-1"></i></small>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Alerts -->
                 {% if stats.pending_approvals > 0 %}
                 <div class="alert alert-warning alert-dismissible fade show" role="alert">
@@ -294,6 +320,14 @@
                                     <div class="col-md-3 mb-3">
                                         <a href="{{ url_for('payment_config') }}" class="btn btn-danger btn-block w-100 py-3">
                                             <i class="fas fa-cog me-2"></i> Config. Pagamento
+                                        </a>
+                                    </div>
+                                    <div class="col-md-3 mb-3">
+                                        <a href="{{ url_for('support_dashboard') }}" class="btn btn-danger btn-block w-100 py-3">
+                                            <i class="fas fa-headset me-2"></i> Suporte 
+                                            {% if stats.unread_tickets > 0 %}
+                                            <span class="badge bg-light text-danger">{{ stats.unread_tickets }}</span>
+                                            {% endif %}
                                         </a>
                                     </div>
                                 </div>

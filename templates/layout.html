@@ -60,6 +60,9 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{{ url_for('support_dashboard') }}">
                                 <i class="fas fa-headset me-2"></i> Suporte
+                                {% if stats.unread_tickets > 0 %}
+                                <span class="badge rounded-pill bg-danger ms-2">{{ stats.unread_tickets }}</span>
+                                {% endif %}
                             </a>
                         </li>
                         
