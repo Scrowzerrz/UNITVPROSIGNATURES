@@ -1525,12 +1525,31 @@ def reply_to_ticket(ticket_id):
             flash('A resposta não pode estar vazia.', 'warning')
             return redirect(url_for('view_ticket', ticket_id=ticket_id))
         
+        # Obter informações do ticket para enviar notificação
+        ticket = get_ticket(ticket_id)
+        if not ticket:
+            flash('Ticket não encontrado.', 'danger')
+            return redirect(url_for('support_dashboard'))
+            
         # Adicionar a resposta ao ticket
         telegram_id = session.get('telegram_id')
         success = add_message_to_ticket(ticket_id, telegram_id, 'admin', reply_text)
         
         if success:
             flash('Resposta enviada com sucesso.', 'success')
+            
+            # Importar função para notificar o usuário pelo Telegram
+            try:
+                # Importando a função do bot
+                from bot import notify_user_about_ticket_reply
+                
+                # Notificar o usuário via Telegram
+                user_id = ticket['user_id']
+                notify_user_about_ticket_reply(ticket_id, user_id, reply_text)
+                logger.info(f"Usuário {user_id} notificado sobre resposta ao ticket {ticket_id}")
+            except Exception as notification_error:
+                logger.error(f"Erro ao notificar usuário via Telegram: {notification_error}")
+                # Não retornamos erro ao admin, pois a resposta foi salva com sucesso
         else:
             flash('Erro ao enviar resposta. Tente novamente.', 'danger')
         

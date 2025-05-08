@@ -24,7 +24,47 @@
             "user_replies": 1,
             "closed_at": "2025-05-08T21:18:31.690839",
             "closed_by": "user"
+        },
+        "2": {
+            "id": "2",
+            "user_id": 6067681666,
+            "user_name": "Scrowzer None",
+            "username": "scrowzer",
+            "status": "closed",
+            "created_at": "2025-05-08T21:20:50.034968",
+            "updated_at": "2025-05-08T21:23:02.742176",
+            "messages": [
+                {
+                    "id": "b23195ec-9793-428b-9463-7ce325930011",
+                    "from_id": 6067681666,
+                    "from_type": "user",
+                    "text": "Teste123",
+                    "timestamp": "2025-05-08T21:20:50.034968",
+                    "read": true
+                },
+                {
+                    "id": "bead1cc6-e233-47ca-8f0b-e811543df267",
+                    "from_id": "6067681666",
+                    "from_type": "admin",
+                    "text": "Se estiver tendo problemas para fazer login, tente estas etapas:\r\n1. Verifique se suas credenciais estão corretas\r\n2. Certifique-se de que seu plano está ativo\r\n3. Tente limpar o cache do aplicativo\r\n4. Reinicie o dispositivo\r\n\r\nSe o problema persistir, nos informe para verificarmos.",
+                    "timestamp": "2025-05-08T21:21:13.588388",
+                    "read": true
+                },
+                {
+                    "id": "917385dc-44cb-4cb8-93fe-4629ad83e298",
+                    "from_id": "6067681666",
+                    "from_type": "admin",
+                    "text": "Seu problema foi resolvido! Se precisar de mais alguma coisa, não hesite em entrar em contato novamente.",
+                    "timestamp": "2025-05-08T21:23:02.742176",
+                    "read": false
+                }
+            ],
+            "admin_notified": true,
+            "admin_replies": 2,
+            "user_replies": 1,
+            "closed_at": "2025-05-08T21:23:12.650302",
+            "closed_by": "admin"
         }
     },
-    "current_id": 1
+    "current_id": 2
 }
