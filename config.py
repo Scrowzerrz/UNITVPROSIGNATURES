@@ -15,6 +15,7 @@ LOGINS_FILE = f'{DATA_DIR}/logins.json'
 BOT_CONFIG_FILE = f'{DATA_DIR}/bot_config.json'
 AUTH_FILE = f'{DATA_DIR}/auth.json'
 SESSION_FILE = f'{DATA_DIR}/sessions.json'
+GIVEAWAYS_FILE = f'{DATA_DIR}/giveaways.json'
 
 # Session configurations
 SESSION_EXPIRY_HOURS = 24
@@ -110,6 +111,15 @@ def init_json_files():
     if not os.path.exists(SESSION_FILE):
         with open(SESSION_FILE, 'w') as f:
             json.dump({}, f)
+    
+    # Create giveaways.json if it doesn't exist
+    if not os.path.exists(GIVEAWAYS_FILE):
+        with open(GIVEAWAYS_FILE, 'w') as f:
+            json.dump({
+                'active': {},
+                'completed': {},
+                'current_id': 0
+            }, f, indent=4)
 
 # Initialize the files
 init_json_files()
