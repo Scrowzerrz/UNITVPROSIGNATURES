@@ -11,7 +11,7 @@ import uuid
 # Import from our modules
 from config import (
     BOT_TOKEN, ADMIN_ID, PLANS, USERS_FILE, PAYMENTS_FILE,
-    LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE
+    LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, GIVEAWAYS_FILE
 )
 from utils import (
     get_user, create_user, save_user, create_payment, update_payment,
@@ -22,7 +22,10 @@ from utils import (
     add_coupon, validate_coupon, use_coupon, delete_coupon, apply_referral_discount, 
     process_successful_referral, get_expiring_subscriptions, read_json_file, write_json_file,
     create_auth_token, is_admin_telegram_id, is_allowed_telegram_id,
-    add_allowed_telegram_id, remove_allowed_telegram_id, generate_access_code
+    add_allowed_telegram_id, remove_allowed_telegram_id, generate_access_code,
+    get_giveaway, get_giveaways_for_admin, create_giveaway, draw_giveaway_winners,
+    cancel_giveaway, add_participant_to_giveaway, get_active_giveaways, 
+    redraw_giveaway, confirm_giveaway_win, check_expired_confirmations
 )
 
 # Configure logging

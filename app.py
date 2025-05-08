@@ -1122,6 +1122,186 @@ def mercadopago_webhook():
         logger.error(f"Error processing Mercado Pago webhook: {e}")
         return jsonify({"status": "error", "message": "Internal server error"}), 500
 
+# Custom Jinja filters
+@app.template_filter('formatcurrency')
+def format_currency_filter(value):
+    if value is None:
+        return "R$ 0,00"
+    return format_currency(value)
+
+@app.template_filter('formatdate')
+def format_date_filter(date_str):
+    if not date_str:
+        return ""
+    try:
+        dt = datetime.fromisoformat(date_str)
+        return dt.strftime('%d/%m/%Y %H:%M')
+    except:
+        return date_str
+        
+# Giveaway Routes
+@app.route('/giveaways')
+@login_required
+def giveaways():
+    """Página de gerenciamento de sorteios"""
+    try:
+        # Obter todos os sorteios para exibição no painel administrativo
+        giveaways = get_giveaways_for_admin()
+        
+        return render_template('giveaways.html', 
+                              giveaways=giveaways, 
+                              plans=PLANS,
+                              message=request.args.get('message'),
+                              message_type=request.args.get('message_type', 'info'))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao carregar a página de sorteios.', 'danger')
+        return redirect(url_for('dashboard'))
+
+@app.route('/giveaways/create', methods=['POST'])
+@login_required
+def create_giveaway_route():
+    """Criar um novo sorteio"""
+    try:
+        # Obter dados do formulário
+        plan_type = request.form.get('plan_type')
+        winners_count = int(request.form.get('winners_count', 1))
+        duration_hours = int(request.form.get('duration_hours', 24))
+        max_participants = request.form.get('max_participants')
+        description = request.form.get('description')
+        
+        # Validar dados
+        if plan_type not in PLANS:
+            flash('Tipo de plano inválido.', 'danger')
+            return redirect(url_for('giveaways'))
+        
+        if winners_count < 1 or winners_count > 10:
+            flash('Número de ganhadores deve estar entre 1 e 10.', 'danger')
+            return redirect(url_for('giveaways'))
+        
+        if duration_hours < 1 or duration_hours > 168:
+            flash('Duração do sorteio deve estar entre 1 e 168 horas.', 'danger')
+            return redirect(url_for('giveaways'))
+        
+        # Converter max_participants para int se não estiver vazio
+        if max_participants:
+            try:
+                max_participants = int(max_participants)
+                if max_participants < 0:
+                    max_participants = None
+            except:
+                max_participants = None
+        else:
+            max_participants = None
+        
+        # Criar sorteio
+        admin_id = session.get('telegram_id')
+        giveaway_id = create_giveaway(admin_id, plan_type, winners_count, duration_hours, max_participants, description)
+        
+        if giveaway_id:
+            flash(f'Sorteio #{giveaway_id} criado com sucesso! Compartilhe o sorteio através do bot.', 'success')
+        else:
+            flash('Erro ao criar sorteio. Tente novamente.', 'danger')
+        
+        return redirect(url_for('giveaways'))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao criar sorteio. Tente novamente.', 'danger')
+        return redirect(url_for('giveaways'))
+
+@app.route('/giveaways/draw')
+@login_required
+def draw_giveaway_winners_route():
+    """Sortear ganhadores de um sorteio"""
+    try:
+        giveaway_id = request.args.get('giveaway_id')
+        if not giveaway_id:
+            flash('ID do sorteio não fornecido.', 'danger')
+            return redirect(url_for('giveaways'))
+        
+        # Realizar sorteio
+        winners = draw_giveaway_winners(giveaway_id)
+        
+        if winners is None:
+            flash('Não foi possível realizar o sorteio. Verifique se o sorteio existe e está no status correto.', 'danger')
+        elif len(winners) == 0:
+            flash('Não há participantes suficientes para realizar o sorteio.', 'warning')
+        else:
+            flash(f'Sorteio realizado com sucesso! {len(winners)} ganhador(es) selecionado(s).', 'success')
+        
+        return redirect(url_for('giveaways'))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao realizar sorteio. Tente novamente.', 'danger')
+        return redirect(url_for('giveaways'))
+
+@app.route('/giveaways/cancel', methods=['POST'])
+@login_required
+def cancel_giveaway_route():
+    """Cancelar um sorteio"""
+    try:
+        giveaway_id = request.form.get('giveaway_id')
+        if not giveaway_id:
+            flash('ID do sorteio não fornecido.', 'danger')
+            return redirect(url_for('giveaways'))
+        
+        # Cancelar sorteio
+        admin_id = session.get('telegram_id')
+        success = cancel_giveaway(giveaway_id, admin_id)
+        
+        if success:
+            flash(f'Sorteio #{giveaway_id} cancelado com sucesso.', 'success')
+        else:
+            flash('Não foi possível cancelar o sorteio. Verifique se o sorteio existe e está ativo.', 'danger')
+        
+        return redirect(url_for('giveaways'))
+    except Exception as e:
+        log_exception(e)
+        flash('Erro ao cancelar sorteio. Tente novamente.', 'danger')
+        return redirect(url_for('giveaways'))
+
+@app.route('/giveaways/details')
+@login_required
+def get_giveaway_details():
+    """Obter detalhes de um sorteio para exibição em modal"""
+    try:
+        giveaway_id = request.args.get('giveaway_id')
+        if not giveaway_id:
+            return '<div class="alert alert-danger">ID do sorteio não fornecido.</div>'
+        
+        # Obter dados do sorteio
+        giveaway = get_giveaway(giveaway_id)
+        
+        if not giveaway:
+            return '<div class="alert alert-danger">Sorteio não encontrado.</div>'
+        
+        # Renderizar template com detalhes do sorteio
+        return render_template('giveaway_details.html', giveaway=giveaway)
+    except Exception as e:
+        log_exception(e)
+        return '<div class="alert alert-danger">Erro ao carregar detalhes do sorteio.</div>'
+
+@app.route('/giveaways/winners')
+@login_required
+def get_giveaway_winners():
+    """Obter detalhes dos ganhadores de um sorteio para exibição em modal"""
+    try:
+        giveaway_id = request.args.get('giveaway_id')
+        if not giveaway_id:
+            return '<div class="alert alert-danger">ID do sorteio não fornecido.</div>'
+        
+        # Obter dados do sorteio
+        giveaway = get_giveaway(giveaway_id)
+        
+        if not giveaway:
+            return '<div class="alert alert-danger">Sorteio não encontrado.</div>'
+        
+        # Renderizar template com detalhes dos ganhadores
+        return render_template('giveaway_winners.html', giveaway=giveaway)
+    except Exception as e:
+        log_exception(e)
+        return '<div class="alert alert-danger">Erro ao carregar detalhes dos ganhadores.</div>'
+
 # Error handlers
 @app.errorhandler(404)
 def page_not_found(e):
