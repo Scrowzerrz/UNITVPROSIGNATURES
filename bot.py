@@ -203,7 +203,10 @@ def check_login_availability():
 
 # Check giveaways tasks
 def check_giveaways():
-    """Check for expired giveaway confirmations and redraws"""
+    """Check for expired giveaway confirmations and redraws, and send periodic notifications"""
+    # Contador para notificações periódicas (25 minutos = 25 * 60 segundos)
+    notification_counter = 0
+    
     while True:
         try:
             # Verificar confirmações expiradas
@@ -258,6 +261,66 @@ def check_giveaways():
                         )
                     except Exception as e:
                         logger.error(f"Erro ao notificar novo ganhador {winner_id}: {e}")
+            
+            # Enviar notificações periódicas sobre sorteios ativos (a cada 25 minutos)
+            notification_counter += 1
+            
+            # Se passaram 25 minutos (25 iterações de 1 minuto cada)
+            if notification_counter >= 25:
+                # Resetar o contador
+                notification_counter = 0
+                
+                # Obter sorteios ativos
+                active_giveaways = get_active_giveaways()
+                
+                if active_giveaways:
+                    logger.info(f"Enviando notificação periódica sobre {len(active_giveaways)} sorteios ativos")
+                    
+                    # Obter todos os usuários
+                    users = read_json_file(USERS_FILE)
+                    
+                    if users:
+                        # Preparar mensagem sobre os sorteios
+                        giveaway_message = "🎁 *SORTEIOS ATIVOS* 🎁\n\n"
+                        giveaway_message += "Temos sorteios ativos que você pode participar!\n"
+                        giveaway_message += "Use o comando /start e clique no botão 'Sorteios Ativos' para participar.\n\n"
+                        giveaway_message += "Sorteios disponíveis:\n"
+                        
+                        # Adicionar informações sobre cada sorteio
+                        for giveaway_id, giveaway in active_giveaways.items():
+                            if giveaway.get('status') == 'active':
+                                plan_name = giveaway.get('plan_name', 'Desconhecido')
+                                end_date = datetime.fromisoformat(giveaway["ends_at"])
+                                remaining_time = end_date - datetime.now()
+                                remaining_hours = int(remaining_time.total_seconds() / 3600)
+                                remaining_minutes = int((remaining_time.total_seconds() % 3600) / 60)
+                                
+                                # Adicionar informações do sorteio à mensagem
+                                giveaway_message += f"- *{plan_name}* (Encerra em {remaining_hours}h {remaining_minutes}min)\n"
+                        
+                        # Enviar mensagem para todos os usuários
+                        sent_count = 0
+                        for user_id in users:
+                            try:
+                                # Verificar se o usuário já está participando de todos os sorteios
+                                all_participating = True
+                                for giveaway_id, giveaway in active_giveaways.items():
+                                    if giveaway.get('status') == 'active' and str(user_id) not in giveaway.get('participants', []):
+                                        all_participating = False
+                                        break
+                                
+                                # Só enviar notificação se o usuário não estiver participando de todos os sorteios
+                                if not all_participating:
+                                    bot.send_message(
+                                        user_id,
+                                        giveaway_message,
+                                        parse_mode="Markdown"
+                                    )
+                                    sent_count += 1
+                            except Exception as e:
+                                logger.error(f"Erro ao enviar notificação periódica para o usuário {user_id}: {e}")
+                        
+                        logger.info(f"Notificação de sorteio enviada para {sent_count} usuários")
                 
         except Exception as e:
             logger.error(f"Error in giveaway background task: {e}")
@@ -351,6 +414,13 @@ def start_command(message):
             )
         else:
             welcome_msg += "\n\n⚠️ *As vendas estão temporariamente suspensas devido à alta demanda.* ⚠️"
+    
+    # Adicionar botão de sorteios ativos para todos os usuários
+    active_giveaways = get_active_giveaways()
+    if active_giveaways:
+        keyboard.add(
+            types.InlineKeyboardButton("🎁 Sorteios Ativos", callback_data="view_active_giveaways")
+        )
     
     # Add support button
     keyboard.add(
@@ -3209,6 +3279,13 @@ def back_to_start(call):
         else:
             welcome_msg += "\n\n⚠️ *As vendas estão temporariamente suspensas devido à alta demanda.* ⚠️"
     
+    # Adicionar botão de sorteios ativos para todos os usuários
+    active_giveaways = get_active_giveaways()
+    if active_giveaways:
+        keyboard.add(
+            types.InlineKeyboardButton("🎁 Sorteios Ativos", callback_data="view_active_giveaways")
+        )
+    
     # Add support button
     keyboard.add(
         types.InlineKeyboardButton("💬 Suporte", callback_data="support"),
@@ -3872,6 +3949,158 @@ def giveaway_cancel_command(message, giveaway_id):
             message, 
             "❌ Não foi possível cancelar o sorteio. Verifique se o sorteio existe e está ativo."
         )
+
+# Comandos para usuários visualizarem sorteios ativos
+@bot.callback_query_handler(func=lambda call: call.data == "view_active_giveaways")
+def view_active_giveaways(call):
+    """Permite que um usuário veja os sorteios ativos e participe"""
+    user_id = call.from_user.id
+    active_giveaways = get_active_giveaways()
+    
+    if not active_giveaways:
+        bot.answer_callback_query(
+            call.id, 
+            "Não há sorteios ativos no momento.", 
+            show_alert=True
+        )
+        # Voltar para o menu inicial
+        back_to_start(call)
+        return
+    
+    # Criar mensagem com a lista de sorteios
+    response = "🎁 *Sorteios Ativos* 🎁\n\n" 
+    response += "Escolha um sorteio para participar:\n\n"
+    
+    # Criar teclado com botões para cada sorteio
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    for giveaway_id, giveaway in active_giveaways.items():
+        if giveaway.get('status') == 'active':
+            # Calcular tempo restante
+            end_date = datetime.fromisoformat(giveaway["ends_at"])
+            remaining_time = end_date - datetime.now()
+            remaining_hours = remaining_time.total_seconds() / 3600
+            remaining_minutes = (remaining_time.total_seconds() % 3600) / 60
+            
+            # Verificar se o sorteio tem limite de participantes
+            participants_count = len(giveaway.get('participants', []))
+            max_participants = giveaway.get('max_participants')
+            participants_text = f"{participants_count}" 
+            if max_participants:
+                participants_text += f"/{max_participants}"
+                
+                # Verificar se já atingiu o limite
+                if participants_count >= max_participants:
+                    continue  # Pular este sorteio pois já está cheio
+            else:
+                participants_text += "/∞"
+            
+            # Adicionar botão para o sorteio
+            plan_name = giveaway.get('plan_name', 'Desconhecido')
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    f"{plan_name} - {int(remaining_hours)}h {int(remaining_minutes)}min", 
+                    callback_data=f"giveaway_details_{giveaway_id}"
+                )
+            )
+    
+    # Adicionar botão para voltar
+    keyboard.add(
+        types.InlineKeyboardButton("🔙 Voltar", callback_data="start")
+    )
+    
+    # Verificar se há sorteios disponíveis
+    if len(keyboard.keyboard) <= 1:  # Se só tiver o botão de voltar
+        bot.answer_callback_query(
+            call.id, 
+            "Não há sorteios disponíveis ou todos já estão com limite de participantes atingido.", 
+            show_alert=True
+        )
+        # Voltar para o menu inicial
+        back_to_start(call)
+        return
+    
+    # Editar a mensagem com a lista de sorteios
+    bot.edit_message_text(
+        response,
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+# Handler para exibir detalhes de um sorteio específico
+@bot.callback_query_handler(func=lambda call: call.data.startswith("giveaway_details_"))
+def view_giveaway_details(call):
+    """Exibe detalhes de um sorteio específico e permite participar"""
+    user_id = call.from_user.id
+    giveaway_id = call.data.replace("giveaway_details_", "")
+    
+    giveaway = get_giveaway(giveaway_id)
+    if not giveaway or giveaway.get('status') != 'active':
+        bot.answer_callback_query(
+            call.id, 
+            "Este sorteio não está mais disponível.", 
+            show_alert=True
+        )
+        view_active_giveaways(call)
+        return
+    
+    # Calcular tempo restante
+    end_date = datetime.fromisoformat(giveaway["ends_at"])
+    remaining_time = end_date - datetime.now()
+    remaining_hours = remaining_time.total_seconds() / 3600
+    remaining_minutes = (remaining_time.total_seconds() % 3600) / 60
+    
+    # Verificar se o usuário já está participando
+    user_is_participant = str(user_id) in giveaway.get('participants', [])
+    
+    # Preparar mensagem com detalhes do sorteio
+    plan_name = giveaway.get('plan_name', 'Desconhecido')
+    winners_count = giveaway.get('winners_count', 1)
+    participants_count = len(giveaway.get('participants', []))
+    max_participants = giveaway.get('max_participants')
+    participants_text = f"{participants_count}"
+    if max_participants:
+        participants_text += f"/{max_participants}"
+    else:
+        participants_text += "/∞"
+    
+    message = (
+        f"🎁 *Detalhes do Sorteio* 🎁\n\n"
+        f"Prêmio: *{plan_name}*\n"
+        f"Número de ganhadores: *{winners_count}*\n"
+        f"Participantes atuais: *{participants_text}*\n"
+        f"Tempo restante: *{int(remaining_hours)}h {int(remaining_minutes)}min*\n\n"
+    )
+    
+    if user_is_participant:
+        message += "✅ *Você já está participando deste sorteio!*\n\n"
+        message += "Aguarde o sorteio acontecer no horário marcado. Boa sorte! 🍀"
+    else:
+        message += "Clique no botão abaixo para participar deste sorteio:"
+    
+    # Preparar teclado
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    if not user_is_participant:
+        keyboard.add(
+            types.InlineKeyboardButton("🎯 Participar do Sorteio", callback_data=f"join_giveaway_{giveaway_id}")
+        )
+    
+    keyboard.add(
+        types.InlineKeyboardButton("🔙 Voltar aos Sorteios", callback_data="view_active_giveaways"),
+        types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
+    )
+    
+    # Editar a mensagem com os detalhes do sorteio
+    bot.edit_message_text(
+        message,
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
 
 # Comandos para usuários participarem dos sorteios
 @bot.callback_query_handler(func=lambda call: call.data.startswith("join_giveaway_"))
