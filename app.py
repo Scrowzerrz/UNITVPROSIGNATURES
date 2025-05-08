@@ -1343,19 +1343,82 @@ def internal_server_error(e):
 @login_required
 def support_dashboard():
     try:
+        # Obter dados para estatísticas
+        users = read_json_file(USERS_FILE) or {}
+        payments = read_json_file(PAYMENTS_FILE) or {}
+        logins = read_json_file(LOGINS_FILE) or {}
+        bot_config = read_json_file(BOT_CONFIG_FILE) or {}
+        
+        # Contar usuários ativos
+        active_users = 0
+        for user_id, user_data in users.items():
+            if user_data and user_data.get('has_active_plan'):
+                active_users += 1
+        
+        # Logins disponíveis
+        available_logins = {
+            '30_days': len(logins.get('30_days', [])),
+            '6_months': len(logins.get('6_months', [])),
+            '1_year': len(logins.get('1_year', []))
+        }
+        
+        # Contar pagamentos pendentes de aprovação
+        pending_approvals = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'pending_approval':
+                pending_approvals += 1
+                
+        # Contar usuários aguardando login
+        waiting_for_login = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'approved' and not payment_data.get('login_delivered'):
+                waiting_for_login += 1
+        
+        # Status de vendas
+        sales_status = bot_config.get('sales_enabled', True)
+        
+        # Cupons
+        coupons = bot_config.get('coupons', {})
+        active_coupons = len(coupons) if coupons else 0
+        
+        # Contar tickets não lidos
+        telegram_id = session.get('telegram_id')
+        unread_tickets = 0
+        
         # Obter todos os tickets ativos
         active_tickets = get_all_active_tickets()
+        
+        # Contar tickets não lidos para stats
+        for ticket_id, ticket in active_tickets.items():
+            has_unread = False
+            for message in ticket['messages']:
+                if not message['read'] and message['from_type'] == 'user':
+                    has_unread = True
+                    break
+            if has_unread:
+                unread_tickets += 1
         
         # Converter para lista e ordenar por data de atualização (mais recentes primeiro)
         tickets_list = [ticket for _, ticket in active_tickets.items()]
         tickets_list.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
         
-        # Obter informações do usuário atual
-        telegram_id = session.get('telegram_id')
+        # Construir objeto stats para o template
+        stats = {
+            'total_users': len(users),
+            'active_users': active_users,
+            'pending_payments': pending_approvals,  # Mesmo que pending_approvals
+            'available_logins': available_logins,
+            'pending_approvals': pending_approvals,
+            'waiting_for_login': waiting_for_login,
+            'sales_status': sales_status,
+            'active_coupons': active_coupons,
+            'unread_tickets': unread_tickets
+        }
         
         return render_template('support.html', 
-                              tickets=tickets_list, 
-                              admin_id=telegram_id)
+                               tickets=tickets_list, 
+                               admin_id=telegram_id,
+                               stats=stats)  # Adicionando stats ao template
     except Exception as e:
         logger.error(f"Error loading support dashboard: {e}")
         flash('Erro ao carregar o painel de suporte. Tente novamente.', 'danger')
@@ -1377,9 +1440,74 @@ def view_ticket(ticket_id):
         telegram_id = session.get('telegram_id')
         mark_ticket_messages_as_read(ticket_id, 'admin')
         
+        # Obter dados para estatísticas (necessário para o layout base)
+        users = read_json_file(USERS_FILE) or {}
+        payments = read_json_file(PAYMENTS_FILE) or {}
+        logins = read_json_file(LOGINS_FILE) or {}
+        bot_config = read_json_file(BOT_CONFIG_FILE) or {}
+        
+        # Contar usuários ativos
+        active_users = 0
+        for user_id, user_data in users.items():
+            if user_data and user_data.get('has_active_plan'):
+                active_users += 1
+        
+        # Logins disponíveis
+        available_logins = {
+            '30_days': len(logins.get('30_days', [])),
+            '6_months': len(logins.get('6_months', [])),
+            '1_year': len(logins.get('1_year', []))
+        }
+        
+        # Contar pagamentos pendentes de aprovação
+        pending_approvals = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'pending_approval':
+                pending_approvals += 1
+                
+        # Contar usuários aguardando login
+        waiting_for_login = 0
+        for payment_id, payment_data in payments.items():
+            if payment_data and payment_data.get('status') == 'approved' and not payment_data.get('login_delivered'):
+                waiting_for_login += 1
+        
+        # Status de vendas
+        sales_status = bot_config.get('sales_enabled', True)
+        
+        # Cupons
+        coupons = bot_config.get('coupons', {})
+        active_coupons = len(coupons) if coupons else 0
+        
+        # Contar tickets não lidos
+        unread_tickets = 0
+        active_tickets = get_all_active_tickets()
+        
+        for ticket_item_id, ticket_item in active_tickets.items():
+            has_unread = False
+            for message in ticket_item['messages']:
+                if not message['read'] and message['from_type'] == 'user':
+                    has_unread = True
+                    break
+            if has_unread:
+                unread_tickets += 1
+        
+        # Construir objeto stats para o template
+        stats = {
+            'total_users': len(users),
+            'active_users': active_users,
+            'pending_payments': pending_approvals,
+            'available_logins': available_logins,
+            'pending_approvals': pending_approvals,
+            'waiting_for_login': waiting_for_login,
+            'sales_status': sales_status,
+            'active_coupons': active_coupons,
+            'unread_tickets': unread_tickets
+        }
+        
         return render_template('ticket_detail.html', 
-                              ticket=ticket,
-                              admin_id=telegram_id)
+                               ticket=ticket,
+                               admin_id=telegram_id,
+                               stats=stats)  # Adicionando stats ao template
     except Exception as e:
         logger.error(f"Error viewing ticket: {e}")
         flash('Erro ao visualizar o ticket. Tente novamente.', 'danger')
