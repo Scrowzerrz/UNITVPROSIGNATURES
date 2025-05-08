@@ -36,6 +36,11 @@ def log_exception(e):
 app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "unitv_secret_key")
 
+# Expor as variáveis de configuração para os templates
+app.jinja_env.globals['config'] = {
+    'ADMIN_ID': ADMIN_ID
+}
+
 # Login required decorator
 def login_required(f):
     @wraps(f)
@@ -93,11 +98,28 @@ def root_admin_required(f):
         
         # Verificar se o usuário é o admin root
         telegram_id = session.get('telegram_id')
-        if not is_root_admin(telegram_id):
+        
+        # Log detalhado para debug
+        logger.debug(f"root_admin_required: Checking if user {telegram_id} is root admin")
+        logger.debug(f"ADMIN_ID from environment: {ADMIN_ID} (type: {type(ADMIN_ID)})")
+        
+        # Verificação robusta comparando com ADMIN_ID
+        is_root = is_root_admin(telegram_id)
+        logger.debug(f"is_root_admin({telegram_id}) returned: {is_root}")
+        
+        if not is_root:
+            # Verificação adicional e detalhada para debug
+            str_telegram_id = str(telegram_id).strip() if telegram_id else "None"
+            str_admin_id = str(ADMIN_ID).strip() if ADMIN_ID else "None"
             logger.warning(f"User {telegram_id} attempted to access root admin area but is not root admin")
+            logger.warning(f"Comparison: '{str_telegram_id}' vs root admin '{str_admin_id}', equal: {str_telegram_id == str_admin_id}")
+            
+            # Mensagem informativa para o usuário
             flash('Apenas o administrador principal pode acessar esta página.', 'danger')
             return redirect(url_for('dashboard'))
-            
+        
+        # Se chegou aqui, é o admin root
+        logger.debug(f"Access granted: User {telegram_id} confirmed as root admin")
         return f(*args, **kwargs)
     return decorated_function
 

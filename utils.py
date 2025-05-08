@@ -1128,11 +1128,25 @@ def is_admin_telegram_id(telegram_id):
 
 def is_root_admin(telegram_id):
     """Check if a Telegram ID is the root admin (set in .env)"""
-    # Convert to string for comparison
-    telegram_id = str(telegram_id)
-    
-    # Check primary admin ID from environment variable
-    return telegram_id == str(ADMIN_ID)
+    if telegram_id is None:
+        return False
+        
+    # Convert to string for comparison - com validação adicional
+    try:
+        telegram_id_str = str(telegram_id).strip()
+        admin_id_str = str(ADMIN_ID).strip()
+        
+        # Log para debug
+        logger.debug(f"is_root_admin: Comparing telegram_id={telegram_id_str} with ADMIN_ID={admin_id_str}")
+        
+        # Verificação detalhada
+        is_root = telegram_id_str == admin_id_str
+        logger.debug(f"is_root_admin result: {is_root}")
+        return is_root
+    except Exception as e:
+        logger.error(f"Error in is_root_admin: {e}")
+        # Em caso de erro, verificar diretamente com o valor bruto para maior segurança
+        return str(telegram_id) == str(ADMIN_ID)
 
 def is_allowed_telegram_id(telegram_id):
     """Check if a Telegram ID is allowed to access the admin panel"""
