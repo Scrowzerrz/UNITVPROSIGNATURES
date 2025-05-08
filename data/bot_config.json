@@ -3,19 +3,19 @@
     "warning_sent": true,
     "sales_suspended_time": "2025-05-08T13:02:50.139842",
     "coupons": {
-        "LONT65": {
-            "code": "LONT65",
+        "TOP50": {
+            "code": "TOP50",
             "discount_type": "percentage",
-            "discount_value": 65.0,
-            "expiration_date": "2025-05-11T00:00:00",
+            "discount_value": 50.0,
+            "expiration_date": "2025-06-23T00:00:00",
             "max_uses": 10,
+            "max_uses_per_user": 1,
             "min_purchase": 0.0,
             "applicable_plans": [
-                "6_months",
                 "1_year"
             ],
             "uses": 0,
-            "users": []
+            "usage_history": {}
         }
     },
     "referral_rewards": {

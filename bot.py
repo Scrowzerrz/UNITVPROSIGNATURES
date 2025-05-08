@@ -637,6 +637,11 @@ def process_coupon_code(message, plan_id, price):
     discount = coupon_result['discount']
     final_price = coupon_result['final_amount']
     
+    # Registrar o uso do cupom imediatamente
+    coupon_code = coupon_code.strip().upper()
+    use_coupon(coupon_code, user_id)
+    logger.info(f"Coupon {coupon_code} usage registered for user {user_id}")
+    
     # Create confirmation message with discount
     confirm_msg = (
         f"🎟️ *Cupom Aplicado com Sucesso!* 🎟️\n\n"
