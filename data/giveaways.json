@@ -1,5 +1,25 @@
 {
     "active": {
+        "2": {
+            "id": "2",
+            "admin_id": "6067681666",
+            "plan_type": "6_months",
+            "plan_name": "Plano 6 Meses",
+            "winners_count": 1,
+            "duration_hours": 96,
+            "created_at": "2025-05-08T16:05:10.609980",
+            "ends_at": "2025-05-12T16:05:10.609970",
+            "max_participants": null,
+            "description": "SORTEIO UNITV 6 MESES AGORA, <b>PARTICIPE<\\b>",
+            "participants": {},
+            "message_id": null,
+            "winners": [],
+            "status": "active",
+            "confirmation_requests": {},
+            "notified_users": false
+        }
+    },
+    "completed": {
         "1": {
             "id": "1",
             "admin_id": "6067681666",
@@ -14,10 +34,11 @@
             "participants": {},
             "message_id": null,
             "winners": [],
-            "status": "active",
-            "confirmation_requests": {}
+            "status": "cancelled",
+            "confirmation_requests": {},
+            "cancelled_at": "2025-05-08T16:04:16.304789",
+            "cancelled_by": "6067681666"
         }
     },
-    "completed": {},
-    "current_id": 1
+    "current_id": 2
 }

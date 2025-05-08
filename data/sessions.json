@@ -97,14 +97,5 @@
             "first_name": "Scrowzer",
             "username": "scrowzer"
         }
-    },
-    "e49e717b95109651b2f8d9076a0ce49506189f10767e1c18e6af4ae926b94fa9": {
-        "telegram_id": "6067681666",
-        "created_at": "2025-05-08T15:37:20.804985",
-        "expires_at": "2025-05-09T15:37:20.804994",
-        "user_data": {
-            "first_name": "Scrowzer",
-            "username": "scrowzer"
-        }
     }
 }
