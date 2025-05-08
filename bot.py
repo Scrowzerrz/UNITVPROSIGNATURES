@@ -34,7 +34,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 
 # Background tasks
 def check_login_availability():
-    """Check if logins are available, notify admin if they're running low"""
+    """Check if logins are available, notify admin if they're running low, and check for expired payments"""
     while True:
         try:
             logins = read_json_file(LOGINS_FILE)
@@ -148,6 +148,48 @@ def check_login_availability():
                 )
                 bot_config['pending_payment_notified'] = True
                 write_json_file(BOT_CONFIG_FILE, bot_config)
+            
+            # ======= Verificar pagamentos PIX expirados do Mercado Pago =======
+            # Verificar pagamentos pendentes no sistema e cancelar os expirados (mais de 10 minutos)
+            payments = read_json_file(PAYMENTS_FILE)
+            current_time = datetime.now()
+            payments_updated = False
+            
+            for payment_id, payment in payments.items():
+                if payment['status'] == 'pending' and payment.get('mp_payment_id'):
+                    # Verificar se o pagamento já passou do tempo limite (10 minutos)
+                    if 'created_at' in payment:
+                        created_at = datetime.fromisoformat(payment['created_at'])
+                        expiration_time = created_at + timedelta(minutes=10)
+                        
+                        if current_time > expiration_time:
+                            logger.info(f"Pagamento expirado encontrado: {payment_id}, Mercado Pago ID: {payment.get('mp_payment_id')}")
+                            
+                            # Cancelar o pagamento no Mercado Pago
+                            if _cancel_mercado_pago_payment(payment.get('mp_payment_id')):
+                                logger.info(f"Pagamento Mercado Pago {payment.get('mp_payment_id')} cancelado por tempo expirado")
+                            
+                            # Atualizar status para expirado
+                            payment['status'] = 'expired'
+                            payments[payment_id] = payment
+                            payments_updated = True
+                            
+                            # Notificar o usuário
+                            try:
+                                user_id = payment['user_id']
+                                bot.send_message(
+                                    user_id,
+                                    f"⏰ *Pagamento PIX Expirado* ⏰\n\n"
+                                    f"O QR Code PIX para seu pagamento expirou após 10 minutos.\n"
+                                    f"Para tentar novamente, inicie um novo pagamento usando o comando /start.",
+                                    parse_mode="Markdown"
+                                )
+                            except Exception as e:
+                                logger.error(f"Erro ao notificar usuário sobre pagamento expirado: {e}")
+            
+            # Salvar pagamentos atualizados, se necessário
+            if payments_updated:
+                write_json_file(PAYMENTS_FILE, payments)
         
         except Exception as e:
             logger.error(f"Error in background task: {e}")
@@ -1046,23 +1088,9 @@ def pay_with_pix_mercado_pago(call):
                 types.InlineKeyboardButton("↩️ Voltar para PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
             )
             
-            # Enviar QR code como imagem (se disponível)
-            if qr_code_base64:
-                try:
-                    import base64
-                    from io import BytesIO
-                    
-                    # Decodificar a imagem base64
-                    qr_image = BytesIO(base64.b64decode(qr_code_base64))
-                    
-                    # Enviar a imagem
-                    bot.send_photo(
-                        call.message.chat.id,
-                        qr_image,
-                        caption=f"QR Code PIX para pagamento de {PLANS[plan_id]['name']} - {format_currency(amount)}"
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending QR code image: {e}")
+            # Enviar QR code como parte da mesma mensagem (se disponível)
+            # Em vez de enviar uma imagem separada, vamos incorporar tudo na mesma mensagem
+            # para não sobrecarregar a API do Telegram e facilitar o fluxo do usuário
             
             # Editar mensagem com instruções
             bot.edit_message_text(
@@ -1428,6 +1456,8 @@ def show_pending_payment(call):
         bot.answer_callback_query(call.id, "Você não tem pagamentos pendentes.")
         return
     
+    payment_id = payment['payment_id']
+    
     # Create message
     payment_msg = (
         f"💰 *Você tem um Pagamento Pendente* 💰\n\n"
@@ -1436,10 +1466,26 @@ def show_pending_payment(call):
         f"Status: {get_payment_status_text(payment['status'])}\n\n"
     )
     
+    # Calcular tempo restante até expiração (se for pagamento pendente com Mercado Pago)
+    expiration_info = ""
+    if payment['status'] == 'pending' and payment.get('mp_payment_id') and 'created_at' in payment:
+        created_at = datetime.fromisoformat(payment['created_at'])
+        expiration_time = created_at + timedelta(minutes=10)
+        current_time = datetime.now()
+        
+        # Se ainda não expirou
+        if current_time < expiration_time:
+            minutes_left = int((expiration_time - current_time).total_seconds() / 60)
+            seconds_left = int((expiration_time - current_time).total_seconds() % 60)
+            
+            expiration_info = f"\n⏰ *Tempo restante para pagamento: {minutes_left}min {seconds_left}s* ⏰\n"
+        else:
+            expiration_info = "\n⏰ *Este pagamento expirou!* ⏰\nCrie um novo pagamento.\n"
+    
     if payment['status'] == 'pending':
         payment_msg += (
             f"Por favor, complete as informações de pagamento.\n"
-            f"Clique em 'Continuar Pagamento' para prosseguir."
+            f"Clique em 'Continuar Pagamento' para prosseguir.{expiration_info}"
         )
     elif payment['status'] == 'pending_approval':
         payment_msg += (
@@ -1451,13 +1497,23 @@ def show_pending_payment(call):
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     
     if payment['status'] == 'pending':
-        keyboard.add(
-            types.InlineKeyboardButton("✅ Continuar Pagamento", callback_data=f"continue_payment_{payment['payment_id']}"),
-            types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment['payment_id']}")
-        )
+        # Verificar o tipo de pagamento
+        if payment.get('mp_payment_id'):
+            # Pagamento via Mercado Pago
+            keyboard.add(
+                types.InlineKeyboardButton("📱 Continuar com PIX Mercado Pago", callback_data=f"pay_pix_mp_{payment_id}"),
+                types.InlineKeyboardButton("↩️ Usar PIX Manual", callback_data=f"pay_pix_manual_{payment_id}"),
+                types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}")
+            )
+        else:
+            # Pagamento manual
+            keyboard.add(
+                types.InlineKeyboardButton("✅ Continuar Pagamento", callback_data=f"continue_payment_{payment_id}"),
+                types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}")
+            )
     elif payment['status'] == 'pending_approval':
         keyboard.add(
-            types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment['payment_id']}")
+            types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}")
         )
     
     keyboard.add(types.InlineKeyboardButton("🔙 Voltar", callback_data="start"))
