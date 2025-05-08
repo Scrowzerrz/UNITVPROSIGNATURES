@@ -47,69 +47,11 @@ PLANS = {
     }
 }
 
-# Initialize JSON files if they don't exist
-def init_json_files():
-    # Create users.json if it doesn't exist
-    if not os.path.exists(USERS_FILE):
-        with open(USERS_FILE, 'w') as f:
-            json.dump({}, f)
-    
-    # Create payments.json if it doesn't exist
-    if not os.path.exists(PAYMENTS_FILE):
-        with open(PAYMENTS_FILE, 'w') as f:
-            json.dump({}, f)
-    
-    # Create logins.json if it doesn't exist
-    if not os.path.exists(LOGINS_FILE):
-        with open(LOGINS_FILE, 'w') as f:
-            json.dump({
-                '30_days': [],
-                '6_months': [],
-                '1_year': []
-            }, f)
-    
-    # Create bot_config.json if it doesn't exist
-    if not os.path.exists(BOT_CONFIG_FILE):
-        default_config = {
-            'sales_enabled': True,
-            'warning_sent': False,
-            'sales_suspended_time': None,
-            'coupons': {},
-            'referral_rewards': {
-                'referrer_discount': 10,  # 10% discount
-                'referred_discount': 5,   # 5% discount for referred user
-                'free_month_after_referrals': 3  # Number of successful referrals for free month
-            },
-            'payment_settings': {
-                'pix': {
-                    'enabled': True,
-                    'key': 'nossaempresa@email.com',
-                    'name': 'Empresa UniTV LTDA',
-                    'bank': 'Banco UniTV'
-                },
-                'mercado_pago': {
-                    'enabled': False,
-                    'access_token': '',
-                    'public_key': ''
-                }
-            }
-        }
-        with open(BOT_CONFIG_FILE, 'w') as f:
-            json.dump(default_config, f, indent=4)
-    
-    # Create auth.json if it doesn't exist (stores admin Telegram IDs)
-    if not os.path.exists(AUTH_FILE):
-        auth_config = {
-            'admin_telegram_ids': [ADMIN_ID] if ADMIN_ID else [],
-            'allowed_telegram_ids': []  # Telegram IDs allowed to access the admin panel
-        }
-        with open(AUTH_FILE, 'w') as f:
-            json.dump(auth_config, f, indent=4)
-    
-    # Create sessions.json if it doesn't exist (stores active login sessions)
-    if not os.path.exists(SESSION_FILE):
-        with open(SESSION_FILE, 'w') as f:
-            json.dump({}, f)
+# Define constants para módulos de configuração
+MINIMUM_LOGINS_THRESHOLD = 5  # Número mínimo de logins que deve estar disponível
+
+# A inicialização dos arquivos JSON agora é feita pelo config_service.py
+from config_service import init_json_files
 
 # Initialize the files
 init_json_files()

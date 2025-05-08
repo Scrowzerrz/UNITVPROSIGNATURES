@@ -3,7 +3,7 @@ import secrets
 import hashlib
 from datetime import datetime, timedelta
 
-from config import USERS_FILE, PLANS, AUTH_FILE, SESSION_FILE, SESSION_EXPIRY_HOURS
+from config import USERS_FILE, PLANS, AUTH_FILE, SESSION_FILE, SESSION_EXPIRY_HOURS, BOT_CONFIG_FILE
 from db_utils import read_json_file, write_json_file
 
 # Configuração de logging

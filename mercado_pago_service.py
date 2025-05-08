@@ -4,9 +4,9 @@ import json
 import base64
 from datetime import datetime
 
-from config import BOT_CONFIG_FILE
+from config import BOT_CONFIG_FILE, PAYMENTS_FILE
 from db_utils import read_json_file, write_json_file
-from payment_service import get_payment, update_payment
+from payment_service import get_payment, update_payment, assign_login_to_user
 
 # Configuração de logging
 logger = logging.getLogger(__name__)
