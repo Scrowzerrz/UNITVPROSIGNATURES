@@ -15,12 +15,12 @@ from config import (
 )
 from utils import (
     get_user, create_user, save_user, create_payment, update_payment,
-    get_payment, cancel_payment, get_pending_approvals, get_users_waiting_for_login,
-    check_should_suspend_sales, suspend_sales, resume_sales, sales_enabled,
-    format_currency, calculate_plan_price, get_available_login, add_login,
-    assign_login_to_user, get_user_pending_payment, add_coupon, validate_coupon,
-    use_coupon, delete_coupon, apply_referral_discount, process_successful_referral,
-    get_expiring_subscriptions, read_json_file, write_json_file,
+    get_payment, cancel_payment, _cancel_mercado_pago_payment, get_pending_approvals, 
+    get_users_waiting_for_login, check_should_suspend_sales, suspend_sales, 
+    resume_sales, sales_enabled, format_currency, calculate_plan_price, 
+    get_available_login, add_login, assign_login_to_user, get_user_pending_payment, 
+    add_coupon, validate_coupon, use_coupon, delete_coupon, apply_referral_discount, 
+    process_successful_referral, get_expiring_subscriptions, read_json_file, write_json_file,
     create_auth_token, is_admin_telegram_id, is_allowed_telegram_id,
     add_allowed_telegram_id, remove_allowed_telegram_id, generate_access_code
 )
@@ -989,13 +989,22 @@ def pay_with_pix_mercado_pago(call):
                         )
                         
                         # Editar mensagem com instruções atualizadas
-                        bot.edit_message_text(
+                        msg = bot.edit_message_text(
                             mp_msg,
                             call.message.chat.id,
                             call.message.message_id,
                             reply_markup=keyboard,
                             parse_mode="Markdown"
                         )
+                        
+                        # Registrar esta mensagem como relacionada ao pagamento (se ainda não estiver registrada)
+                        if payment and 'related_messages' in payment:
+                            related_messages = payment['related_messages']
+                            message_info = {'chat_id': call.message.chat.id, 'message_id': call.message.message_id}
+                            if message_info not in related_messages:
+                                related_messages.append(message_info)
+                                update_payment(payment_id, {'related_messages': related_messages})
+                                logger.info(f"Registered message {call.message.message_id} as related to existing payment {payment_id}")
                         return
                     else:
                         # O pagamento já foi processado, cancelado ou teve outro status final
