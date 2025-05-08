@@ -1032,8 +1032,8 @@ def pay_with_pix_mercado_pago(call):
                     "number": "00000000000"  # CPF fictício, em produção usar CPF real
                 }
             },
-            # Adicionar data de expiração do PIX (10 minutos)
-            "date_of_expiration": (datetime.now() + timedelta(minutes=10)).isoformat(),
+            # Adicionar data de expiração do PIX (10 minutos) no formato correto
+            "date_of_expiration": (datetime.now() + timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S.000Z'),
             "notification_url": "https://unitv-subscription-bot.replit.app/webhooks/mercadopago"  # URL real para notificações
         }
         
