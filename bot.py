@@ -1111,8 +1111,16 @@ def pay_with_pix_mercado_pago(call):
             
         else:
             # Erro ao criar pagamento no Mercado Pago
-            error_msg = response.json().get('message', 'Erro desconhecido')
-            logger.error(f"Mercado Pago payment error: {error_msg}")
+            try:
+                error_response = response.json()
+                error_msg = error_response.get('message', 'Erro desconhecido')
+                error_detail = error_response.get('error', '')
+                response_status = response.status_code
+                logger.error(f"Mercado Pago payment error: Status: {response_status}, Message: {error_msg}, Detail: {error_detail}")
+                logger.error(f"Full Mercado Pago error response: {error_response}")
+            except Exception as json_error:
+                logger.error(f"Error parsing Mercado Pago response: {json_error}")
+                logger.error(f"Raw response: {response.text}")
             
             bot.edit_message_text(
                 f"❌ *Erro ao gerar QR Code PIX* ❌\n\n"
@@ -1128,19 +1136,45 @@ def pay_with_pix_mercado_pago(call):
     
     except Exception as e:
         # Tratar qualquer erro durante o processo
+        import traceback
+        error_traceback = traceback.format_exc()
         logger.error(f"Error creating Mercado Pago payment: {e}")
+        logger.error(f"Detailed traceback: {error_traceback}")
         
-        bot.edit_message_text(
-            f"❌ *Erro ao gerar QR Code PIX* ❌\n\n"
-            f"Ocorreu um erro ao processar seu pagamento via Mercado Pago.\n"
-            f"Por favor, tente pagar usando o PIX Manual.",
-            call.message.chat.id,
-            call.message.message_id,
-            reply_markup=types.InlineKeyboardMarkup().add(
-                types.InlineKeyboardButton("↩️ Usar PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
-            ),
-            parse_mode="Markdown"
-        )
+        # Verificar se é um erro de token de acesso (autenticação)
+        auth_error = False
+        if hasattr(e, 'args') and len(e.args) > 0:
+            error_msg = str(e.args[0])
+            if 'authentication' in error_msg.lower() or 'token' in error_msg.lower() or 'unauthorized' in error_msg.lower():
+                auth_error = True
+                logger.error("Identified authentication error with Mercado Pago API")
+        
+        # Mensagem específica se for erro de autenticação
+        if auth_error:
+            bot.edit_message_text(
+                f"❌ *Erro de autenticação no Mercado Pago* ❌\n\n"
+                f"Não foi possível autenticar com a API do Mercado Pago.\n"
+                f"Por favor, tente usar o PIX Manual enquanto o problema é corrigido.",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton("↩️ Usar PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
+                ),
+                parse_mode="Markdown"
+            )
+        else:
+            # Mensagem genérica para outros erros
+            bot.edit_message_text(
+                f"❌ *Erro ao gerar QR Code PIX* ❌\n\n"
+                f"Ocorreu um erro ao processar seu pagamento via Mercado Pago.\n"
+                f"Por favor, tente pagar usando o PIX Manual.",
+                call.message.chat.id,
+                call.message.message_id,
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton("↩️ Usar PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
+                ),
+                parse_mode="Markdown"
+            )
 
 # Legacy handler for compatibility - redirect to manual PIX
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pay_pix_") and not call.data.startswith("pay_pix_manual_") and not call.data.startswith("pay_pix_mp_"))
