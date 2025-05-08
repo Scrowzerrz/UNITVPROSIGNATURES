@@ -80,6 +80,26 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Decorator para verificar se o usuário é admin root
+def root_admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Verificar se o usuário está logado e tem um telegram_id na sessão
+        if 'logged_in' not in session or 'telegram_id' not in session:
+            logger.warning(f"User not logged in or missing telegram_id in root_admin_required")
+            flash('Por favor, faça login para acessar esta página.', 'warning')
+            return redirect(url_for('login', next=request.url))
+        
+        # Verificar se o usuário é o admin root
+        telegram_id = session.get('telegram_id')
+        if not is_root_admin(telegram_id):
+            logger.warning(f"User {telegram_id} attempted to access root admin area but is not root admin")
+            flash('Apenas o administrador principal pode acessar esta página.', 'danger')
+            return redirect(url_for('dashboard'))
+            
+        return f(*args, **kwargs)
+    return decorated_function
+
 # Routes
 @app.route('/')
 def index():
@@ -709,8 +729,9 @@ def delete_coupon_route(code):
 # Payment Settings Routes
 @app.route('/payment-settings')
 @login_required
+@root_admin_required
 def payment_settings():
-    """Payment settings page with PIX and Mercado Pago configuration"""
+    """Payment settings page with PIX and Mercado Pago configuration - restricted to root admin only"""
     try:
         # Log debug information about the session
         logger.debug(f"Session in payment_settings: {session}")
@@ -785,8 +806,9 @@ def payment_settings():
 # Alternative payment settings route
 @app.route('/payment-config')
 @login_required
+@root_admin_required
 def payment_config():
-    """Alternative route to payment settings"""
+    """Alternative route to payment settings - restricted to root admin only"""
     try:
         # Get payment settings from bot_config
         bot_config = read_json_file(BOT_CONFIG_FILE)
@@ -849,8 +871,9 @@ def payment_config():
 
 @app.route('/payment-settings/pix', methods=['POST'])
 @login_required
+@root_admin_required
 def save_pix_settings():
-    """Save PIX payment settings"""
+    """Save PIX payment settings - restricted to root admin only"""
     try:
         # Get current settings
         bot_config = read_json_file(BOT_CONFIG_FILE)
@@ -885,8 +908,9 @@ def save_pix_settings():
 
 @app.route('/payment-settings/mercado-pago', methods=['POST'])
 @login_required
+@root_admin_required
 def save_mercado_pago_settings():
-    """Save Mercado Pago payment settings"""
+    """Save Mercado Pago payment settings - restricted to root admin only"""
     try:
         # Get current settings
         bot_config = read_json_file(BOT_CONFIG_FILE)
