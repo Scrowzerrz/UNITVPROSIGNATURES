@@ -283,6 +283,7 @@
                                         <th>Desconto</th>
                                         <th>Validade</th>
                                         <th>Usos</th>
+                                        <th>Limite por Usuário</th>
                                         <th>Valor Mínimo</th>
                                         <th>Planos</th>
                                         <th>Ações</th>
@@ -295,6 +296,13 @@
                                         <td>{{ coupon.discount_formatted }}</td>
                                         <td>{{ coupon.expiration_formatted }}</td>
                                         <td>{{ coupon.uses_formatted }}</td>
+                                        <td>
+                                            {% if coupon.max_uses_per_user == -1 %}
+                                                <span class="badge bg-secondary">Ilimitado</span>
+                                            {% else %}
+                                                <span class="badge bg-info">{{ coupon.max_uses_per_user }} vez(es)</span>
+                                            {% endif %}
+                                        </td>
                                         <td>{{ coupon.min_purchase_formatted }}</td>
                                         <td>
                                             {% if 'all' in coupon.applicable_plans %}

@@ -605,6 +605,10 @@ def coupons():
             coupon['uses_formatted'] = f"{coupon['uses']} / Unlimited"
         else:
             coupon['uses_formatted'] = f"{coupon['uses']} / {coupon['max_uses']}"
+            
+        # Verificar se temos o novo campo max_uses_per_user (para compatibilidade)
+        if 'max_uses_per_user' not in coupon:
+            coupon['max_uses_per_user'] = 1  # Default para cupons antigos
     
     # Obter descontos sazonais ativos
     seasonal_discounts = get_active_seasonal_discounts()
