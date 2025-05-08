@@ -17,7 +17,7 @@ from utils import (
     generate_access_code, verify_access_code, list_active_access_codes, is_root_admin,
     get_active_seasonal_discounts, add_seasonal_discount, remove_seasonal_discount,
     create_giveaway, get_giveaway, get_giveaways_for_admin, draw_giveaway_winners, cancel_giveaway,
-    remove_plan_from_user
+    remove_plan_from_user, assign_plan_to_user, ban_user, unban_user
 )
 
 # Configure logging
@@ -355,8 +355,9 @@ def assign_plan(user_id):
             duration_days = None
         
         # Atribuir plano ao usuário
-        if assign_plan_to_user(user_id, plan_type, duration_days):
-            flash(f'Plano atribuído com sucesso ao usuário.', 'success')
+        success, plan_id = assign_plan_to_user(user_id, plan_type, duration_days)
+        if success:
+            flash(f'Plano atribuído com sucesso ao usuário (ID do plano: {plan_id}).', 'success')
         else:
             flash('Erro ao atribuir plano ao usuário.', 'danger')
         
@@ -370,9 +371,15 @@ def assign_plan(user_id):
 @login_required
 def remove_plan(user_id):
     try:
+        # Obter ID do plano se fornecido
+        plan_id = request.form.get('plan_id')
+        
         # Remover plano do usuário
-        if remove_plan_from_user(user_id):
-            flash('Plano removido com sucesso do usuário.', 'success')
+        if remove_plan_from_user(user_id, plan_id):
+            if plan_id:
+                flash(f'Plano (ID: {plan_id}) removido com sucesso do usuário.', 'success')
+            else:
+                flash('Todos os planos removidos com sucesso do usuário.', 'success')
         else:
             flash('Erro ao remover plano do usuário.', 'danger')
         
