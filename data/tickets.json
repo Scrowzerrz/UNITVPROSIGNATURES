@@ -1,5 +1,28 @@
 {
-    "active": {},
+    "active": {
+        "3": {
+            "id": "3",
+            "user_id": 6067681666,
+            "user_name": "Scrowzer None",
+            "username": "scrowzer",
+            "status": "open",
+            "created_at": "2025-05-08T21:42:05.559898",
+            "updated_at": "2025-05-08T21:42:05.559898",
+            "messages": [
+                {
+                    "id": "e781c6fe-08ce-4e6d-9f1f-0bc3d70b4585",
+                    "from_id": 6067681666,
+                    "from_type": "user",
+                    "text": "Akakenensmxmrjrhenwjal4ieinfnsmalalalalalqlq",
+                    "timestamp": "2025-05-08T21:42:05.559898",
+                    "read": true
+                }
+            ],
+            "admin_notified": true,
+            "admin_replies": 0,
+            "user_replies": 1
+        }
+    },
     "closed": {
         "1": {
             "id": "1",
@@ -66,5 +89,5 @@
             "closed_by": "admin"
         }
     },
-    "current_id": 2
+    "current_id": 3
 }

@@ -314,10 +314,9 @@
                                                     {% if ticket.messages|length > 1 %}
                                                         {% set first_message = ticket.messages[0] %}
                                                         {% set first_admin_reply_index = -1 %}
-                                                        {% for message in ticket.messages %}
+                                                        {% for message in ticket.messages if first_admin_reply_index == -1 %}
                                                             {% if message.from_type == 'admin' %}
                                                                 {% set first_admin_reply_index = loop.index0 %}
-                                                                {% break %}
                                                             {% endif %}
                                                         {% endfor %}
                                                         
