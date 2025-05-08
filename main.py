@@ -7,6 +7,19 @@ from config import BOT_TOKEN
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Verificar e corrigir pagamentos inconsistentes na inicialização do servidor
+def check_and_fix_inconsistent_payments():
+    try:
+        # Import here to avoid circular imports
+        from bot import fix_inconsistent_payments
+        
+        # Executar a função de correção
+        fixed = fix_inconsistent_payments()
+        if fixed > 0:
+            logger.info(f"[Servidor Web] Corrigidos {fixed} pagamentos inconsistentes na inicialização")
+    except Exception as e:
+        logger.error(f"Erro ao verificar pagamentos inconsistentes: {e}")
+
 # Start bot in a separate thread if token is configured
 def start_bot():
     if BOT_TOKEN:

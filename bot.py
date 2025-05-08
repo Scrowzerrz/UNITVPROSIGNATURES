@@ -29,6 +29,73 @@ from utils import (
     notify_users_about_giveaway
 )
 
+# Função para resolver pagamentos fantasmas
+def fix_inconsistent_payments():
+    """
+    Identifica e corrige pagamentos inconsistentes no sistema.
+    - Marca pagamentos fantasma como entregues
+    - Inicializa a estrutura de planos para usuários que não a possuem
+    
+    Returns:
+        int: Número de pagamentos corrigidos
+    """
+    payments = read_json_file(PAYMENTS_FILE)
+    users = read_json_file(USERS_FILE)
+    
+    # Contador de correções
+    fixed_count = 0
+    
+    # 1. Identificar pagamentos aprovados mas não entregues
+    for payment_id, payment in payments.items():
+        if payment.get('status') == 'approved' and not payment.get('login_delivered', False):
+            user_id = payment.get('user_id')
+            plan_type = payment.get('plan_type')
+            
+            if not user_id or not plan_type:
+                logger.warning(f"Pagamento ID {payment_id} com dados incompletos - ignorando")
+                # Marcar como entregue para evitar notificações falsas
+                payment['login_delivered'] = True
+                payment['is_ghost_payment'] = True
+                fixed_count += 1
+                continue
+                
+            user = users.get(str(user_id))
+            if not user:
+                logger.warning(f"Usuário ID {user_id} não encontrado para pagamento ID {payment_id}")
+                # Marcar como entregue para evitar notificações falsas
+                payment['login_delivered'] = True
+                payment['is_ghost_payment'] = True
+                fixed_count += 1
+                continue
+            
+            # 2. Verificar se o usuário tem a estrutura de planos
+            if 'plans' not in user:
+                logger.info(f"Inicializando estrutura de planos para usuário ID {user_id}")
+                user['plans'] = []
+                fixed_count += 1
+            
+            # 3. Verificar se o pagamento é muito antigo (mais de 60 dias)
+            if payment.get('created_at'):
+                try:
+                    payment_date = datetime.fromisoformat(payment.get('created_at'))
+                    cutoff_date = datetime.now() - timedelta(days=60)
+                    if payment_date < cutoff_date:
+                        logger.info(f"Pagamento ID {payment_id} é muito antigo ({payment_date.isoformat()}). Marcando como entregue.")
+                        payment['login_delivered'] = True
+                        payment['is_ghost_payment'] = True
+                        fixed_count += 1
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            
+    # 4. Salvar as alterações
+    if fixed_count > 0:
+        logger.info(f"Corrigido(s) {fixed_count} pagamento(s) inconsistente(s)")
+        write_json_file(PAYMENTS_FILE, payments)
+        write_json_file(USERS_FILE, users)
+    
+    return fixed_count
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -4268,6 +4335,18 @@ def run_bot():
     
     _bot_running = True
     logger.info("Starting Telegram bot...")
+    
+    # Corrigir pagamentos inconsistentes antes de iniciar o bot
+    try:
+        fixed_count = fix_inconsistent_payments()
+        if fixed_count > 0:
+            logger.info(f"Corrigidos {fixed_count} pagamentos inconsistentes na inicialização")
+            msg = f"🔄 *Manutenção do Sistema* 🔄\n\n{fixed_count} pagamento(s) inconsistente(s) foram corrigidos automaticamente durante a inicialização."
+            bot.send_message(ADMIN_ID, msg, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Erro ao corrigir pagamentos inconsistentes: {e}")
+    
+    # Iniciar tarefas em segundo plano
     start_background_tasks()
     
     # Primeiro, tentar limpar quaisquer atualizações pendentes
