@@ -411,6 +411,11 @@ def start_background_tasks():
     giveaway_thread = threading.Thread(target=check_giveaways)
     giveaway_thread.daemon = True
     giveaway_thread.start()
+    
+    # Thread para verificar tickets de suporte
+    support_thread = threading.Thread(target=check_support_tickets)
+    support_thread.daemon = True
+    support_thread.start()
 
 # Start command
 @bot.message_handler(commands=['start'])
@@ -1964,14 +1969,35 @@ def continue_payment(call):
 # Support
 @bot.callback_query_handler(func=lambda call: call.data == "support")
 def support(call):
+    user_id = call.from_user.id
+    
+    # Verificar se o usuário tem tickets ativos
+    active_tickets = get_user_active_tickets(user_id)
+    unread_count = get_unread_ticket_count(user_id, 'user')
+    
     support_msg = (
         f"💬 *Suporte UniTV* 💬\n\n"
-        f"Se você precisa de ajuda ou tem alguma dúvida, entre em contato com nosso suporte:"
+        f"Se você precisa de ajuda ou tem alguma dúvida, você pode abrir um ticket de suporte e nossa equipe irá te responder em breve."
     )
     
+    if active_tickets:
+        support_msg += f"\n\nVocê tem {len(active_tickets)} ticket(s) de suporte ativo(s)."
+        if unread_count > 0:
+            support_msg += f"\n🔴 Você tem {unread_count} resposta(s) não lida(s)!"
+    
     keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    if active_tickets:
+        keyboard.add(
+            types.InlineKeyboardButton("📋 Ver Meus Tickets", callback_data="view_tickets"),
+            types.InlineKeyboardButton("➕ Abrir Novo Ticket", callback_data="new_ticket")
+        )
+    else:
+        keyboard.add(
+            types.InlineKeyboardButton("📞 Abrir Ticket de Suporte", callback_data="new_ticket")
+        )
+    
     keyboard.add(
-        types.InlineKeyboardButton("📞 Falar com o Suporte", url=f"https://t.me/ADMIN_USERNAME"),
         types.InlineKeyboardButton("🔙 Voltar", callback_data="start")
     )
     
@@ -1982,6 +2008,568 @@ def support(call):
         reply_markup=keyboard,
         parse_mode="Markdown"
     )
+
+# Função para criar um novo ticket
+@bot.callback_query_handler(func=lambda call: call.data == "new_ticket")
+def new_ticket(call):
+    msg = bot.edit_message_text(
+        "📝 *Novo Ticket de Suporte* 📝\n\n"
+        "Por favor, descreva detalhadamente o seu problema ou dúvida em uma única mensagem. "
+        "Nossa equipe irá responder o mais breve possível.",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown"
+    )
+    
+    # Registrar próximo passo
+    bot.register_next_step_handler(msg, process_new_ticket)
+
+# Processamento do texto do novo ticket
+def process_new_ticket(message):
+    user_id = message.from_user.id
+    text = message.text
+    
+    if not text or len(text.strip()) < 5:
+        bot.send_message(
+            user_id,
+            "❌ Sua mensagem é muito curta. Por favor, seja mais detalhado sobre o seu problema ou dúvida.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Criar o ticket
+    ticket_id = create_support_ticket(user_id, text)
+    
+    if not ticket_id:
+        bot.send_message(
+            user_id,
+            "❌ Ocorreu um erro ao criar seu ticket. Por favor, tente novamente mais tarde.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Resposta ao usuário
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("📋 Ver Meus Tickets", callback_data="view_tickets"),
+        types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
+    )
+    
+    bot.send_message(
+        user_id,
+        f"✅ *Ticket #{ticket_id} criado com sucesso!* ✅\n\n"
+        f"Nossa equipe de suporte irá analisar seu ticket e responder em breve. "
+        f"Você receberá uma notificação quando houver uma resposta.",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+    
+    # Notificar administradores
+    notify_admins_about_new_ticket(ticket_id, user_id, text)
+
+# Notificar administradores sobre um novo ticket
+def notify_admins_about_new_ticket(ticket_id, user_id, text):
+    # Obter informações do usuário
+    user = get_user(user_id)
+    user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else f"User {user_id}"
+    username = user.get('username', '') if user else ''
+    
+    # Notificar admin principal
+    admin_msg = (
+        f"🔔 *Novo Ticket de Suporte* 🔔\n\n"
+        f"*Ticket #*: {ticket_id}\n"
+        f"*Usuário*: {user_name} (ID: {user_id})\n"
+        f"*Usuário Telegram*: {f'@{username}' if username else 'N/A'}\n\n"
+        f"*Mensagem*:\n{text[:300]}{'...' if len(text) > 300 else ''}"
+    )
+    
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_{ticket_id}")
+    )
+    
+    try:
+        bot.send_message(
+            ADMIN_ID,
+            admin_msg,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar admin sobre novo ticket: {e}")
+
+# Handler para visualizar tickets do usuário
+@bot.callback_query_handler(func=lambda call: call.data == "view_tickets")
+def view_tickets(call):
+    user_id = call.from_user.id
+    
+    # Obter tickets ativos do usuário
+    active_tickets = get_user_active_tickets(user_id)
+    
+    if not active_tickets:
+        bot.edit_message_text(
+            "📋 *Meus Tickets* 📋\n\n"
+            "Você não tem tickets de suporte ativos no momento.",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="Markdown",
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("➕ Abrir Ticket", callback_data="new_ticket"),
+                types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+            )
+        )
+        return
+    
+    # Montar lista de tickets
+    tickets_msg = "📋 *Meus Tickets* 📋\n\n"
+    
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Ordenar tickets por data (mais recentes primeiro)
+    active_tickets.sort(key=lambda x: x['updated_at'], reverse=True)
+    
+    for ticket in active_tickets:
+        ticket_id = ticket['id']
+        unread = False
+        
+        # Verificar se tem mensagens não lidas
+        for message in ticket['messages']:
+            if not message['read'] and message['from_type'] == 'admin':
+                unread = True
+                break
+        
+        status_icon = "🔴" if unread else "🟢"
+        last_update = datetime.fromisoformat(ticket['updated_at'])
+        last_update_str = last_update.strftime("%d/%m/%Y %H:%M")
+        
+        tickets_msg += f"{status_icon} *Ticket #{ticket_id}* - Atualizado em {last_update_str}\n"
+        button_text = f"Visualizar Ticket #{ticket_id}"
+        if unread:
+            button_text = f"🔴 {button_text}"
+        keyboard.add(types.InlineKeyboardButton(
+            button_text,
+            callback_data=f"view_ticket_{ticket_id}"
+        ))
+    
+    keyboard.add(
+        types.InlineKeyboardButton("➕ Abrir Novo Ticket", callback_data="new_ticket"),
+        types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+    )
+    
+    bot.edit_message_text(
+        tickets_msg,
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+# Handler para visualizar um ticket específico
+@bot.callback_query_handler(func=lambda call: call.data.startswith("view_ticket_"))
+def view_ticket_details(call):
+    ticket_id = call.data.split('_')[2]
+    user_id = call.from_user.id
+    
+    # Obter detalhes do ticket
+    ticket = get_ticket(ticket_id)
+    
+    if not ticket or str(ticket['user_id']) != str(user_id):
+        bot.answer_callback_query(call.id, "❌ Ticket não encontrado ou você não tem permissão para visualizá-lo.")
+        return
+    
+    # Marcar mensagens como lidas
+    mark_ticket_messages_as_read(ticket_id, 'user')
+    
+    # Montar mensagem com as últimas mensagens do ticket
+    ticket_msg = (
+        f"📋 *Ticket #{ticket_id}* 📋\n\n"
+        f"*Status*: {'🟢 Aberto' if ticket['status'] == 'open' else '🔴 Fechado'}\n"
+        f"*Criado em*: {datetime.fromisoformat(ticket['created_at']).strftime('%d/%m/%Y %H:%M')}\n\n"
+        f"*Últimas mensagens*:\n"
+    )
+    
+    # Mostrar últimas 5 mensagens (ou todas se menos de 5)
+    messages = ticket['messages'][-5:] if len(ticket['messages']) > 5 else ticket['messages']
+    
+    for msg in messages:
+        sender = "Você" if msg['from_type'] == 'user' else "Suporte"
+        time_str = datetime.fromisoformat(msg['timestamp']).strftime("%d/%m %H:%M")
+        ticket_msg += f"[{time_str}] *{sender}*: {msg['text'][:100]}{'...' if len(msg['text']) > 100 else ''}\n\n"
+    
+    # Keyboard para responder ou voltar
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    if ticket['status'] == 'open':
+        keyboard.add(
+            types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_user_{ticket_id}"),
+            types.InlineKeyboardButton("🔒 Fechar Ticket", callback_data=f"close_ticket_{ticket_id}")
+        )
+    else:
+        keyboard.add(
+            types.InlineKeyboardButton("🔓 Reabrir Ticket", callback_data=f"reopen_ticket_{ticket_id}")
+        )
+    
+    keyboard.add(
+        types.InlineKeyboardButton("🔙 Voltar aos Tickets", callback_data="view_tickets")
+    )
+    
+    bot.edit_message_text(
+        ticket_msg,
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+# Handler para responder a um ticket (usuário)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reply_ticket_user_"))
+def reply_to_ticket_user(call):
+    ticket_id = call.data.split('_')[3]
+    user_id = call.from_user.id
+    
+    # Verificar se o ticket existe e pertence ao usuário
+    ticket = get_ticket(ticket_id)
+    if not ticket or str(ticket['user_id']) != str(user_id) or ticket['status'] != 'open':
+        bot.answer_callback_query(call.id, "❌ Não foi possível responder ao ticket.")
+        return
+    
+    msg = bot.edit_message_text(
+        f"💬 *Responder ao Ticket #{ticket_id}* 💬\n\n"
+        f"Por favor, digite sua resposta para o ticket:",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown"
+    )
+    
+    # Registrar próximo passo
+    bot.register_next_step_handler(msg, process_ticket_reply_user, ticket_id)
+
+# Processar resposta do usuário ao ticket
+def process_ticket_reply_user(message, ticket_id):
+    user_id = message.from_user.id
+    text = message.text
+    
+    if not text or len(text.strip()) < 2:
+        bot.send_message(
+            user_id,
+            "❌ Sua mensagem é muito curta. Por favor, seja mais detalhado.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Adicionar mensagem ao ticket
+    if add_message_to_ticket(ticket_id, user_id, 'user', text):
+        # Resposta ao usuário
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        keyboard.add(
+            types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+            types.InlineKeyboardButton("📋 Todos os Tickets", callback_data="view_tickets"),
+            types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
+        )
+        
+        bot.send_message(
+            user_id,
+            f"✅ *Resposta enviada com sucesso!* ✅\n\n"
+            f"Sua resposta foi adicionada ao ticket #{ticket_id}. "
+            f"Nossa equipe de suporte será notificada.",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+        
+        # Notificar administradores
+        notify_admins_about_ticket_reply(ticket_id, user_id, text)
+    else:
+        bot.send_message(
+            user_id,
+            "❌ Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente mais tarde.",
+            parse_mode="Markdown"
+        )
+
+# Notificar administradores sobre uma resposta a um ticket
+def notify_admins_about_ticket_reply(ticket_id, user_id, text):
+    # Obter informações do usuário
+    user = get_user(user_id)
+    user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else f"User {user_id}"
+    
+    # Notificar admin principal
+    admin_msg = (
+        f"🔔 *Nova Resposta em Ticket* 🔔\n\n"
+        f"*Ticket #*: {ticket_id}\n"
+        f"*Usuário*: {user_name} (ID: {user_id})\n\n"
+        f"*Mensagem*:\n{text[:300]}{'...' if len(text) > 300 else ''}"
+    )
+    
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_{ticket_id}")
+    )
+    
+    try:
+        bot.send_message(
+            ADMIN_ID,
+            admin_msg,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar admin sobre resposta em ticket: {e}")
+
+# Handler para responder a um ticket (admin)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reply_ticket_") and not call.data.startswith("reply_ticket_user_"))
+def reply_to_ticket_admin(call):
+    # Verificar se é admin
+    if not is_admin_telegram_id(call.from_user.id):
+        bot.answer_callback_query(call.id, "⛔ Apenas administradores podem responder tickets!")
+        return
+    
+    ticket_id = call.data.split('_')[2]
+    
+    # Verificar se o ticket existe
+    ticket = get_ticket(ticket_id)
+    if not ticket or ticket['status'] != 'open':
+        bot.answer_callback_query(call.id, "❌ Ticket não encontrado ou já fechado.")
+        return
+    
+    msg = bot.edit_message_text(
+        f"💬 *Responder ao Ticket #{ticket_id}* 💬\n\n"
+        f"Por favor, digite sua resposta para o usuário:",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode="Markdown"
+    )
+    
+    # Registrar próximo passo
+    bot.register_next_step_handler(msg, process_ticket_reply_admin, ticket_id)
+
+# Processar resposta do admin ao ticket
+def process_ticket_reply_admin(message, ticket_id):
+    admin_id = message.from_user.id
+    text = message.text
+    
+    # Verificar se é admin
+    if not is_admin_telegram_id(admin_id):
+        bot.send_message(
+            admin_id,
+            "⛔ Apenas administradores podem responder tickets!",
+            parse_mode="Markdown"
+        )
+        return
+    
+    if not text or len(text.strip()) < 2:
+        bot.send_message(
+            admin_id,
+            "❌ Sua mensagem é muito curta. Por favor, seja mais detalhado.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Obter ticket para saber ID do usuário
+    ticket = get_ticket(ticket_id)
+    if not ticket:
+        bot.send_message(
+            admin_id,
+            "❌ Ticket não encontrado.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    user_id = ticket['user_id']
+    
+    # Adicionar mensagem ao ticket
+    if add_message_to_ticket(ticket_id, admin_id, 'admin', text):
+        # Resposta ao admin
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        keyboard.add(
+            types.InlineKeyboardButton("📋 Ver Todos os Tickets", callback_data="admin_view_tickets"),
+            types.InlineKeyboardButton("🔒 Fechar Ticket", callback_data=f"admin_close_ticket_{ticket_id}")
+        )
+        
+        bot.send_message(
+            admin_id,
+            f"✅ *Resposta enviada com sucesso!* ✅\n\n"
+            f"Sua resposta foi adicionada ao ticket #{ticket_id} e o usuário será notificado.",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+        
+        # Notificar usuário
+        notify_user_about_ticket_reply(ticket_id, user_id, text)
+    else:
+        bot.send_message(
+            admin_id,
+            "❌ Ocorreu um erro ao enviar sua resposta. Por favor, tente novamente mais tarde.",
+            parse_mode="Markdown"
+        )
+
+# Notificar usuário sobre uma resposta a um ticket
+def notify_user_about_ticket_reply(ticket_id, user_id, text):
+    # Notificar usuário
+    user_msg = (
+        f"🔔 *Nova Resposta do Suporte* 🔔\n\n"
+        f"*Ticket #*: {ticket_id}\n\n"
+        f"*Mensagem*:\n{text[:300]}{'...' if len(text) > 300 else ''}"
+    )
+    
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+        types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_user_{ticket_id}")
+    )
+    
+    try:
+        bot.send_message(
+            user_id,
+            user_msg,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar usuário sobre resposta em ticket: {e}")
+
+# Handler para fechar um ticket (usuário)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("close_ticket_"))
+def close_ticket_user(call):
+    ticket_id = call.data.split('_')[2]
+    user_id = call.from_user.id
+    
+    # Verificar se o ticket existe e pertence ao usuário
+    ticket = get_ticket(ticket_id)
+    if not ticket or str(ticket['user_id']) != str(user_id):
+        bot.answer_callback_query(call.id, "❌ Não foi possível fechar o ticket.")
+        return
+    
+    # Confirmar fechamento
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("✅ Sim", callback_data=f"confirm_close_ticket_{ticket_id}"),
+        types.InlineKeyboardButton("❌ Não", callback_data=f"view_ticket_{ticket_id}")
+    )
+    
+    bot.edit_message_text(
+        f"🔒 *Fechar Ticket #{ticket_id}* 🔒\n\n"
+        f"Tem certeza que deseja fechar este ticket? "
+        f"Caso tenha outras dúvidas no futuro, você precisará abrir um novo ticket.",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+# Handler para confirmar fechamento de ticket (usuário)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_close_ticket_"))
+def confirm_close_ticket_user(call):
+    ticket_id = call.data.split('_')[3]
+    user_id = call.from_user.id
+    
+    # Verificar se o ticket existe e pertence ao usuário
+    ticket = get_ticket(ticket_id)
+    if not ticket or str(ticket['user_id']) != str(user_id):
+        bot.answer_callback_query(call.id, "❌ Não foi possível fechar o ticket.")
+        return
+    
+    # Fechar o ticket
+    if close_ticket(ticket_id, 'user'):
+        bot.edit_message_text(
+            f"✅ *Ticket #{ticket_id} Fechado* ✅\n\n"
+            f"O ticket foi fechado com sucesso. "
+            f"Se precisar de mais suporte no futuro, você pode abrir um novo ticket a qualquer momento.",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("📋 Meus Tickets", callback_data="view_tickets"),
+                types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
+            ),
+            parse_mode="Markdown"
+        )
+        
+        # Notificar admin
+        try:
+            bot.send_message(
+                ADMIN_ID,
+                f"🔒 *Ticket #{ticket_id} Fechado pelo Usuário* 🔒\n\n"
+                f"O usuário fechou o ticket #{ticket_id}.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Erro ao notificar admin sobre fechamento de ticket: {e}")
+    else:
+        bot.answer_callback_query(call.id, "❌ Ocorreu um erro ao fechar o ticket. Tente novamente.")
+
+# Handler para reabrir um ticket (usuário)
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reopen_ticket_"))
+def reopen_ticket_user(call):
+    ticket_id = call.data.split('_')[2]
+    user_id = call.from_user.id
+    
+    # Verificar se o ticket existe e pertence ao usuário
+    ticket = get_ticket(ticket_id)
+    if not ticket or str(ticket['user_id']) != str(user_id):
+        bot.answer_callback_query(call.id, "❌ Não foi possível reabrir o ticket.")
+        return
+    
+    # Reabrir o ticket
+    if reopen_ticket(ticket_id):
+        bot.edit_message_text(
+            f"✅ *Ticket #{ticket_id} Reaberto* ✅\n\n"
+            f"O ticket foi reaberto com sucesso. "
+            f"Nossa equipe de suporte será notificada sobre a reabertura.",
+            call.message.chat.id,
+            call.message.message_id,
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+                types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
+            ),
+            parse_mode="Markdown"
+        )
+        
+        # Notificar admin
+        try:
+            bot.send_message(
+                ADMIN_ID,
+                f"🔓 *Ticket #{ticket_id} Reaberto pelo Usuário* 🔓\n\n"
+                f"O usuário reabriu o ticket #{ticket_id}.",
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_{ticket_id}")
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Erro ao notificar admin sobre reabertura de ticket: {e}")
+    else:
+        bot.answer_callback_query(call.id, "❌ Ocorreu um erro ao reabrir o ticket. Tente novamente.")
+
+# Tarefa em segundo plano para verificar tickets não lidos e notificar admin
+def check_support_tickets():
+    while True:
+        try:
+            # Obter tickets que precisam de notificação ao admin
+            tickets_needing_notification = get_tickets_needing_admin_notification()
+            
+            if tickets_needing_notification:
+                # Para cada ticket, verificar se o admin já foi notificado
+                for ticket in tickets_needing_notification:
+                    ticket_id = ticket['id']
+                    user_id = ticket['user_id']
+                    
+                    # Obter a última mensagem do usuário
+                    last_user_message = None
+                    for msg in reversed(ticket['messages']):
+                        if msg['from_type'] == 'user':
+                            last_user_message = msg
+                            break
+                    
+                    if last_user_message:
+                        # Notificar admin sobre novo ticket ou resposta
+                        notify_admins_about_ticket_reply(ticket_id, user_id, last_user_message['text'])
+                                        
+                        # Marcar que admin foi notificado
+                        mark_ticket_messages_as_read(ticket_id, 'admin')
+        
+        except Exception as e:
+            logger.error(f"Erro na tarefa de verificação de tickets: {e}")
+        
+        # Verificar a cada 2 minutos
+        time.sleep(120)
 
 # Referral program
 @bot.callback_query_handler(func=lambda call: call.data == "referral_program")
