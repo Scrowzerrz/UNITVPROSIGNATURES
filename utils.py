@@ -361,18 +361,138 @@ def update_payment(payment_id, data):
     return False
 
 def get_user_pending_payment(user_id):
+    """
+    Retorna o pagamento pendente de um usuário, se existir.
+    Também verifica se o pagamento expirou (10 minutos) e cancela se necessário.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+    
+    Returns:
+        dict: Dados do pagamento pendente ou None
+    """
     payments = read_json_file(PAYMENTS_FILE)
+    current_time = datetime.now()
+    
     for payment_id, payment in payments.items():
         if payment['user_id'] == str(user_id) and payment['status'] == 'pending':
+            # Verificar se o pagamento expirou (10 minutos)
+            if 'created_at' in payment:
+                created_at = datetime.fromisoformat(payment['created_at'])
+                expiration_time = created_at + timedelta(minutes=10)
+                
+                if current_time > expiration_time:
+                    # Pagamento expirou
+                    payment['status'] = 'expired'
+                    
+                    # Se for um pagamento do Mercado Pago, cancelar na API
+                    if payment.get('mp_payment_id'):
+                        try:
+                            _cancel_mercado_pago_payment(payment.get('mp_payment_id'))
+                        except Exception as e:
+                            logger.error(f"Erro ao cancelar pagamento expirado no Mercado Pago: {e}")
+                    
+                    # Salvar alteração
+                    payments[payment_id] = payment
+                    write_json_file(PAYMENTS_FILE, payments)
+                    return None
+            
+            # Pagamento pendente válido
+            payment['payment_id'] = payment_id
             return payment
+    
     return None
 
+def _cancel_mercado_pago_payment(mp_payment_id):
+    """
+    Função auxiliar para cancelar um pagamento no Mercado Pago
+    
+    Args:
+        mp_payment_id (str): ID do pagamento no Mercado Pago
+    
+    Returns:
+        bool: True se o cancelamento foi bem-sucedido, False caso contrário
+    """
+    try:
+        import requests
+        import uuid
+        import logging
+        import json
+        
+        # Obter configurações do Mercado Pago
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
+        access_token = mp_settings.get('access_token')
+        
+        if not access_token:
+            logging.warning("Não foi possível cancelar pagamento MP: token não encontrado")
+            return False
+        
+        # Configurar headers
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-Idempotency-Key": str(uuid.uuid4())
+        }
+        
+        # Primeiro verificar status atual
+        status_response = requests.get(
+            f"https://api.mercadopago.com/v1/payments/{mp_payment_id}",
+            headers=headers
+        )
+        
+        if status_response.status_code == 200:
+            payment_data = status_response.json()
+            current_status = payment_data.get('status')
+            
+            # Só cancelar se estiver em um estado que permite cancelamento
+            if current_status in ['pending', 'in_process', 'authorized']:
+                cancel_data = {"status": "cancelled"}
+                cancel_response = requests.put(
+                    f"https://api.mercadopago.com/v1/payments/{mp_payment_id}",
+                    headers=headers,
+                    json=cancel_data
+                )
+                
+                if cancel_response.status_code in [200, 201]:
+                    logging.info(f"Pagamento Mercado Pago {mp_payment_id} cancelado com sucesso")
+                    return True
+                else:
+                    logging.warning(f"Falha ao cancelar pagamento Mercado Pago {mp_payment_id}: {cancel_response.status_code}")
+            else:
+                logging.info(f"Pagamento Mercado Pago {mp_payment_id} já está em estado final: {current_status}")
+        else:
+            logging.warning(f"Falha ao obter status do pagamento Mercado Pago: {status_response.status_code}")
+        
+        return False
+    except Exception as e:
+        logging.error(f"Erro ao cancelar pagamento Mercado Pago: {e}")
+        return False
+
 def cancel_payment(payment_id):
+    """
+    Cancela um pagamento e limpa recursos associados (como QR codes do Mercado Pago)
+    
+    Args:
+        payment_id (str): ID do pagamento a ser cancelado
+        
+    Returns:
+        bool: True se o cancelamento foi bem-sucedido, False caso contrário
+    """
     payments = read_json_file(PAYMENTS_FILE)
     if payment_id in payments:
-        payments[payment_id]['status'] = 'cancelled'
+        payment = payments[payment_id]
+        
+        # Se for um pagamento do Mercado Pago, tenta cancelar na API
+        if payment.get('mp_payment_id'):
+            _cancel_mercado_pago_payment(payment['mp_payment_id'])
+        
+        # Marca como cancelado no nosso sistema independente do resultado
+        payment['status'] = 'cancelled'
+        payments[payment_id] = payment
         write_json_file(PAYMENTS_FILE, payments)
         return True
+    
     return False
 
 # Login management functions

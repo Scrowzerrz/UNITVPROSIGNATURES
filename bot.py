@@ -854,6 +854,97 @@ def pay_with_pix_mercado_pago(call):
     plan_id = payment['plan_type']
     amount = payment['amount']
     
+    # Verificar se já há um pagamento Mercado Pago ativo para este pagamento
+    if payment.get('mp_payment_id'):
+        # Mostrar mensagem temporária enquanto processa
+        temp_msg = bot.edit_message_text(
+            "⏳ *Verificando pagamento existente...* ⏳\n\nPor favor, aguarde um momento.",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="Markdown"
+        )
+        
+        # Get Mercado Pago settings
+        bot_config = read_json_file(BOT_CONFIG_FILE)
+        mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
+        access_token = mp_settings.get('access_token')
+        
+        if access_token:
+            # Verificar status do pagamento no Mercado Pago
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            try:
+                mp_status_response = requests.get(
+                    f"https://api.mercadopago.com/v1/payments/{payment['mp_payment_id']}",
+                    headers=headers
+                )
+                
+                if mp_status_response.status_code == 200:
+                    mp_payment_data = mp_status_response.json()
+                    mp_status = mp_payment_data.get('status')
+                    
+                    # Se o pagamento estiver pendente, mostrar novamente o QR code
+                    if mp_status in ['pending', 'in_process', 'authorized']:
+                        # Obter os dados do PIX
+                        pix_data = mp_payment_data.get('point_of_interaction', {}).get('transaction_data', {})
+                        qr_code = pix_data.get('qr_code', '')
+                        
+                        # Criar a mensagem com as instruções
+                        mp_msg = (
+                            f"📱 *PIX com QR Code via Mercado Pago* 📱\n\n"
+                            f"Plano: {PLANS[plan_id]['name']}\n"
+                            f"Valor: {format_currency(amount)}\n\n"
+                            f"*Instruções:*\n"
+                            f"1. Copie o código PIX abaixo ou use o botão para abrir o QR Code\n"
+                            f"2. Abra o aplicativo do seu banco\n"
+                            f"3. Escolha PIX > Pagar com PIX > Copia e Cola\n"
+                            f"4. Cole o código e confirme o pagamento\n\n"
+                            f"*Código PIX (Copia e Cola):*\n`{qr_code}`\n\n"
+                            f"*O pagamento será confirmado automaticamente* assim que for processado.\n\n"
+                            f"⏰ *ATENÇÃO: Este QR Code expira em 10 minutos* ⏰"
+                        )
+                        
+                        # Criar o teclado
+                        keyboard = types.InlineKeyboardMarkup(row_width=1)
+                        
+                        # Adicionar botão para ver o QR Code
+                        if 'qr_code_url' in pix_data:
+                            qr_url = pix_data['qr_code_url']
+                            keyboard.add(
+                                types.InlineKeyboardButton(text="📱 Ver QR Code PIX", url=qr_url)
+                            )
+                        
+                        # Adicionar outros botões
+                        keyboard.add(
+                            types.InlineKeyboardButton("❌ Cancelar Pagamento", callback_data=f"cancel_payment_{payment_id}"),
+                            types.InlineKeyboardButton("↩️ Voltar para PIX Manual", callback_data=f"pay_pix_manual_{payment_id}")
+                        )
+                        
+                        # Editar mensagem com instruções atualizadas
+                        bot.edit_message_text(
+                            mp_msg,
+                            call.message.chat.id,
+                            call.message.message_id,
+                            reply_markup=keyboard,
+                            parse_mode="Markdown"
+                        )
+                        return
+                    else:
+                        # O pagamento já foi processado, cancelado ou teve outro status final
+                        # Vamos criar um novo
+                        # Primeiro cancelar o pagamento atual para não sobrecarregar a API
+                        _cancel_mercado_pago_payment(payment['mp_payment_id'])
+                        # Continuar para criar um novo pagamento
+                else:
+                    # Erro ao verificar status, vamos criar um novo
+                    logger.warning(f"Failed to check MP payment status: {mp_status_response.status_code}")
+            except Exception as e:
+                logger.error(f"Error checking MP payment status: {e}")
+                # Continuar para criar um novo pagamento
+    
     # Get Mercado Pago settings
     bot_config = read_json_file(BOT_CONFIG_FILE)
     mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
@@ -877,7 +968,7 @@ def pay_with_pix_mercado_pago(call):
         # Obter o token de acesso do Mercado Pago
         access_token = mp_settings.get('access_token')
         
-        # Preparar dados do pagamento
+        # Preparar dados do pagamento com expiração de 10 minutos
         payment_data = {
             "transaction_amount": float(amount),
             "description": f"UniTV - {PLANS[plan_id]['name']} - ID: {payment_id}",
@@ -891,6 +982,8 @@ def pay_with_pix_mercado_pago(call):
                     "number": "00000000000"  # CPF fictício, em produção usar CPF real
                 }
             },
+            # Adicionar data de expiração do PIX (10 minutos)
+            "date_of_expiration": (datetime.now() + timedelta(minutes=10)).isoformat(),
             "notification_url": "https://unitv-subscription-bot.replit.app/webhooks/mercadopago"  # URL real para notificações
         }
         
@@ -933,7 +1026,8 @@ def pay_with_pix_mercado_pago(call):
                 f"3. Escolha PIX > Pagar com PIX > Copia e Cola\n"
                 f"4. Cole o código e confirme o pagamento\n\n"
                 f"*Código PIX (Copia e Cola):*\n`{qr_code}`\n\n"
-                f"*O pagamento será confirmado automaticamente* assim que for processado."
+                f"*O pagamento será confirmado automaticamente* assim que for processado.\n\n"
+                f"⏰ *ATENÇÃO: Este QR Code expira em 10 minutos* ⏰"
             )
             
             # Criar o teclado
