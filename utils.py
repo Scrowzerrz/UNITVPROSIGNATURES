@@ -1746,12 +1746,13 @@ def get_giveaway(giveaway_id):
         logger.error(f"Error getting giveaway: {e}")
         return None
 
-def draw_giveaway_winners(giveaway_id):
+def draw_giveaway_winners(giveaway_id, force=False):
     """
     Realiza o sorteio de ganhadores para um sorteio
     
     Args:
         giveaway_id (str): ID do sorteio
+        force (bool): Se True, realiza o sorteio mesmo se o sorteio ainda estiver ativo
     
     Returns:
         list: Lista de IDs dos usuários ganhadores ou None em caso de erro
@@ -1766,7 +1767,7 @@ def draw_giveaway_winners(giveaway_id):
         giveaway = giveaways['active'][giveaway_id]
         
         # Verificar se o sorteio está pronto para sorteio
-        if giveaway['status'] != 'pending_draw' and giveaway['status'] != 'active':
+        if not force and giveaway['status'] != 'pending_draw' and giveaway['status'] != 'active':
             return None
         
         # Verificar se há participantes suficientes
