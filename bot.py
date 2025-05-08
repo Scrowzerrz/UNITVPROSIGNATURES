@@ -2314,13 +2314,27 @@ def process_ticket_reply_user(message, ticket_id):
             parse_mode="Markdown"
         )
 
-# Atualizado para usar edição de mensagens
-def notify_admins_about_ticket_reply(ticket_id, user_id, text):
+# Função para notificar um único administrador sobre um ticket - otimizada para editar mensagens
+def notify_admin_about_ticket_reply_simple(ticket_id, user_id, text, admin_id=None):
+    """
+    Função que notifica um único administrador sobre um ticket de forma simplificada.
+    Usa edição de mensagem quando possível para reduzir a poluição do chat.
+    
+    Args:
+        ticket_id (str): ID do ticket
+        user_id (str): ID do usuário que enviou a mensagem
+        text (str): Texto da mensagem
+        admin_id (str, optional): ID do admin para notificar. Se None, usa ADMIN_ID global.
+    """
+    # Determinar admin ID - se não for fornecido, usar o ID do admin principal
+    if admin_id is None:
+        admin_id = ADMIN_ID
+    
     # Obter informações do usuário
     user = get_user(user_id)
     user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else f"User {user_id}"
     
-    # Mensagem para o admin principal
+    # Mensagem para o admin
     admin_msg = (
         f"🔔 *Nova Resposta em Ticket* 🔔\n\n"
         f"*Ticket #*: {ticket_id}\n"
@@ -2335,43 +2349,47 @@ def notify_admins_about_ticket_reply(ticket_id, user_id, text):
     
     try:
         # Verificar se existe um ID de mensagem para editar
-        admin_message_id = get_ticket_message_id(ticket_id, 'admin_notification')
+        admin_message_id = get_ticket_message_id(ticket_id, f'admin_notification_{admin_id}')
         
         if admin_message_id:
             # Editar mensagem existente
             try:
                 bot.edit_message_text(
                     admin_msg,
-                    ADMIN_ID,
+                    admin_id,
                     admin_message_id,
                     reply_markup=keyboard,
                     parse_mode="Markdown"
                 )
+                return True
             except Exception as edit_error:
-                logger.error(f"Erro ao editar mensagem de admin para ticket {ticket_id}: {edit_error}")
+                logger.error(f"Erro ao editar mensagem de admin {admin_id} para ticket {ticket_id}: {edit_error}")
                 # Se falhar a edição, envia uma nova mensagem
                 sent_msg = bot.send_message(
-                    ADMIN_ID,
+                    admin_id,
                     admin_msg,
                     reply_markup=keyboard,
                     parse_mode="Markdown"
                 )
                 # Atualiza ID da mensagem
                 if sent_msg:
-                    update_ticket_message_id(ticket_id, 'admin_notification', sent_msg.message_id)
+                    update_ticket_message_id(ticket_id, f'admin_notification_{admin_id}', sent_msg.message_id)
+                return sent_msg is not None
         else:
             # Enviar nova mensagem
             sent_msg = bot.send_message(
-                ADMIN_ID,
+                admin_id,
                 admin_msg,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
             )
             # Guardar ID da mensagem para referência futura
             if sent_msg:
-                update_ticket_message_id(ticket_id, 'admin_notification', sent_msg.message_id)
+                update_ticket_message_id(ticket_id, f'admin_notification_{admin_id}', sent_msg.message_id)
+            return sent_msg is not None
     except Exception as e:
-        logger.error(f"Erro ao notificar admin sobre resposta em ticket: {e}")
+        logger.error(f"Erro ao notificar admin {admin_id} sobre resposta em ticket {ticket_id}: {e}")
+        return False
 
 # Handler para responder a um ticket (admin)
 @bot.callback_query_handler(func=lambda call: call.data.startswith("reply_ticket_") and not call.data.startswith("reply_ticket_user_"))
@@ -2826,17 +2844,47 @@ def notify_admins_about_ticket_reply(ticket_id, user_id, message_text):
         types.InlineKeyboardButton("📝 Responder", callback_data=f"ticket_reply_{ticket_id}")
     )
     
-    # Enviar notificação para todos os admins
+    # Enviar notificação para todos os admins - com suporte a edição de mensagens
     notified_count = 0
     for admin_id in admin_ids:
         try:
-            bot.send_message(
-                admin_id,
-                notification_message,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
-            )
-            notified_count += 1
+            # Verificar se existe uma mensagem para editar
+            admin_message_id = get_ticket_message_id(ticket_id, f'admin_notification_{admin_id}')
+            
+            if admin_message_id:
+                # Tentar editar mensagem existente
+                try:
+                    bot.edit_message_text(
+                        notification_message,
+                        admin_id, 
+                        admin_message_id,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                    notified_count += 1
+                except Exception as edit_error:
+                    logger.error(f"Erro ao editar mensagem para admin {admin_id}: {edit_error}")
+                    # Fallback: enviar nova mensagem
+                    sent_msg = bot.send_message(
+                        admin_id,
+                        notification_message,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                    if sent_msg:
+                        update_ticket_message_id(ticket_id, f'admin_notification_{admin_id}', sent_msg.message_id)
+                        notified_count += 1
+            else:
+                # Enviar nova mensagem
+                sent_msg = bot.send_message(
+                    admin_id,
+                    notification_message,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                if sent_msg:
+                    update_ticket_message_id(ticket_id, f'admin_notification_{admin_id}', sent_msg.message_id)
+                    notified_count += 1
         except Exception as e:
             logger.error(f"Erro ao notificar admin {admin_id} sobre ticket: {e}")
     
