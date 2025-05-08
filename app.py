@@ -1432,6 +1432,26 @@ def close_support_ticket(ticket_id):
         flash('Erro ao fechar o ticket. Tente novamente.', 'danger')
         return redirect(url_for('view_ticket', ticket_id=ticket_id))
 
+# Reopen ticket
+@app.route('/support/ticket/<ticket_id>/reopen', methods=['POST'])
+@login_required
+def reopen_ticket(ticket_id):
+    try:
+        # Reabrir o ticket
+        from support import reopen_ticket as support_reopen_ticket
+        success = support_reopen_ticket(ticket_id)
+        
+        if success:
+            flash('Ticket reaberto com sucesso.', 'success')
+        else:
+            flash('Erro ao reabrir o ticket. Tente novamente.', 'danger')
+        
+        return redirect(url_for('view_ticket', ticket_id=ticket_id))
+    except Exception as e:
+        logger.error(f"Error reopening ticket: {e}")
+        flash('Erro ao reabrir o ticket. Tente novamente.', 'danger')
+        return redirect(url_for('view_ticket', ticket_id=ticket_id))
+
 # Initialize the app
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
