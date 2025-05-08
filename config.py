@@ -5,7 +5,12 @@ from datetime import datetime
 
 # Bot configuration
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-ADMIN_ID = int(os.getenv('ADMIN_TELEGRAM_ID', '0'))
+# Safely convert admin ID to integer, defaulting to 0 if empty or invalid
+try:
+    admin_id_str = os.getenv('ADMIN_TELEGRAM_ID', '0')
+    ADMIN_ID = int(admin_id_str) if admin_id_str else 0
+except ValueError:
+    ADMIN_ID = 0
 
 # File paths
 DATA_DIR = 'data'
