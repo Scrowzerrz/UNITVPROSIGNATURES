@@ -2717,17 +2717,53 @@ def reopen_ticket_user(call):
             parse_mode="Markdown"
         )
         
-        # Notificar admin
+        # Notificar admin - com suporte à edição de mensagens
         try:
-            bot.send_message(
-                ADMIN_ID,
+            # Verificar se existe uma mensagem para editar
+            admin_message_id = get_ticket_message_id(ticket_id, 'admin_notification')
+            
+            notification_text = (
                 f"🔓 *Ticket #{ticket_id} Reaberto pelo Usuário* 🔓\n\n"
-                f"O usuário reabriu o ticket #{ticket_id}.",
-                reply_markup=types.InlineKeyboardMarkup().add(
-                    types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_{ticket_id}")
-                ),
-                parse_mode="Markdown"
+                f"O usuário reabriu o ticket #{ticket_id}."
             )
+            
+            keyboard = types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_{ticket_id}")
+            )
+            
+            if admin_message_id:
+                # Editar mensagem existente
+                try:
+                    bot.edit_message_text(
+                        notification_text,
+                        ADMIN_ID,
+                        admin_message_id,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                except Exception as edit_error:
+                    logger.error(f"Erro ao editar mensagem de notificação para admin: {edit_error}")
+                    # Se falhar a edição, envia uma nova mensagem
+                    sent_msg = bot.send_message(
+                        ADMIN_ID,
+                        notification_text,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                    # Atualiza ID da mensagem
+                    if sent_msg:
+                        update_ticket_message_id(ticket_id, 'admin_notification', sent_msg.message_id)
+            else:
+                # Enviar nova mensagem
+                sent_msg = bot.send_message(
+                    ADMIN_ID,
+                    notification_text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                # Guardar ID da mensagem para referência futura
+                if sent_msg:
+                    update_ticket_message_id(ticket_id, 'admin_notification', sent_msg.message_id)
         except Exception as e:
             logger.error(f"Erro ao notificar admin sobre reabertura de ticket: {e}")
     else:
