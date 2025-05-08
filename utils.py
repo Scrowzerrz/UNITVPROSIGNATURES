@@ -71,7 +71,7 @@ def save_user(user_id, user_data):
     users[str(user_id)] = user_data
     write_json_file(USERS_FILE, users)
     
-def assign_plan_to_user(user_id, plan_type, duration_days=None):
+def assign_plan_to_user(user_id, plan_type, duration_days=None, login_info=None):
     """
     Atribui um plano a um usuário manualmente.
     
@@ -79,44 +79,68 @@ def assign_plan_to_user(user_id, plan_type, duration_days=None):
         user_id (str): ID do usuário no Telegram
         plan_type (str): Tipo de plano ('30_days', '6_months', '1_year')
         duration_days (int, optional): Duração personalizada em dias. Se None, usa a duração padrão do plano.
+        login_info (dict, optional): Informações de login específicas a serem utilizadas
     
     Returns:
         bool: True se o plano foi atribuído com sucesso, False caso contrário
+        str: ID do plano criado em caso de sucesso
     """
     try:
         user = get_user(user_id)
         if not user:
-            return False
+            return False, None
         
         # Determinar a duração do plano
         if duration_days is None:
             duration_days = PLANS[plan_type]['duration_days']
         
-        # Atualizar os dados do usuário
-        user['has_active_plan'] = True
-        user['plan_type'] = plan_type
+        # Inicializar a lista de planos se não existir
+        if 'plans' not in user:
+            user['plans'] = []
         
+        # Gerar um ID único para este plano
+        plan_id = str(uuid.uuid4())
+            
         # Calcular a data de expiração
         expiration_date = datetime.now() + timedelta(days=duration_days)
-        user['plan_expiration'] = expiration_date.isoformat()
         
-        # Resetar a notificação de expiração
-        user['expiration_notified'] = False
+        # Criar o novo plano
+        new_plan = {
+            'id': plan_id,
+            'plan_type': plan_type,
+            'created_at': datetime.now().isoformat(),
+            'expiration_date': expiration_date.isoformat(),
+            'login_info': login_info,
+            'expiration_notified': False,
+            'active': True
+        }
+        
+        # Adicionar o novo plano à lista de planos do usuário
+        user['plans'].append(new_plan)
+        
+        # Atualizar o status geral do usuário para indicar que tem pelo menos um plano ativo
+        user['has_active_plan'] = True
+        
+        # Manter os campos antigos por compatibilidade, mas agora eles refletem o plano mais recente
+        user['plan_type'] = plan_type
+        user['plan_expiration'] = expiration_date.isoformat()
+        user['login_info'] = login_info
         
         # Salvar as alterações
         save_user(user_id, user)
         
-        return True
+        return True, plan_id
     except Exception as e:
         logger.error(f"Error assigning plan to user {user_id}: {e}")
-        return False
+        return False, None
 
-def remove_plan_from_user(user_id):
+def remove_plan_from_user(user_id, plan_id=None):
     """
-    Remove o plano atual de um usuário.
+    Remove um plano específico (ou todos os planos) de um usuário.
     
     Args:
         user_id (str): ID do usuário no Telegram
+        plan_id (str, optional): ID do plano a ser removido. Se None, remove todos os planos.
     
     Returns:
         bool: True se o plano foi removido com sucesso, False caso contrário
@@ -126,11 +150,52 @@ def remove_plan_from_user(user_id):
         if not user:
             return False
         
-        # Remover dados do plano
-        user['has_active_plan'] = False
-        user['plan_type'] = None
-        user['plan_expiration'] = None
-        user['login_info'] = None
+        # Se não existir a lista de planos, usar a lógica antiga
+        if 'plans' not in user:
+            # Remover dados do plano usando o método antigo
+            user['has_active_plan'] = False
+            user['plan_type'] = None
+            user['plan_expiration'] = None
+            user['login_info'] = None
+            save_user(user_id, user)
+            return True
+            
+        # Se um plano específico for fornecido
+        if plan_id:
+            plan_found = False
+            for i, plan in enumerate(user['plans']):
+                if plan['id'] == plan_id:
+                    # Marcar o plano como inativo
+                    user['plans'][i]['active'] = False
+                    # Registrar data de remoção
+                    user['plans'][i]['removed_at'] = datetime.now().isoformat()
+                    plan_found = True
+                    break
+                    
+            if not plan_found:
+                return False
+        else:
+            # Se nenhum plano específico foi fornecido, remover todos os planos
+            for i, plan in enumerate(user['plans']):
+                user['plans'][i]['active'] = False
+                user['plans'][i]['removed_at'] = datetime.now().isoformat()
+        
+        # Verificar se ainda há algum plano ativo
+        active_plans = [plan for plan in user['plans'] if plan.get('active', False)]
+        
+        if active_plans:
+            # Ainda há planos ativos, atualizar os campos de compatibilidade para o plano mais recente
+            most_recent_plan = sorted(active_plans, key=lambda x: x.get('created_at', ''), reverse=True)[0]
+            user['has_active_plan'] = True
+            user['plan_type'] = most_recent_plan['plan_type']
+            user['plan_expiration'] = most_recent_plan['expiration_date']
+            user['login_info'] = most_recent_plan['login_info']
+        else:
+            # Não há mais planos ativos
+            user['has_active_plan'] = False
+            user['plan_type'] = None
+            user['plan_expiration'] = None
+            user['login_info'] = None
         
         # Salvar as alterações
         save_user(user_id, user)
