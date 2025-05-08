@@ -103,18 +103,32 @@
                     </div>
                     
                     {% if ticket.status == 'open' %}
-                    <div class="reply-form mt-4">
-                        <form method="POST" action="{{ url_for('reply_to_ticket', ticket_id=ticket.id) }}">
-                            <div class="form-group">
-                                <label for="reply_text"><strong>Responder ao usuário:</strong></label>
-                                <textarea name="reply_text" id="reply_text" class="form-control" rows="4" required></textarea>
+                    <div class="reply-form mt-4 p-3 bg-light border rounded">
+                        <form method="POST" action="{{ url_for('reply_to_ticket', ticket_id=ticket.id) }}" id="replyForm">
+                            <div class="form-group mb-3">
+                                <label for="reply_text" class="mb-2"><strong>Responder ao usuário:</strong></label>
+                                <textarea name="reply_text" id="reply_text" class="form-control" rows="4" 
+                                          placeholder="Digite sua resposta ao usuário..." required></textarea>
+                                <div class="form-text">Sua mensagem será enviada diretamente para o usuário via Telegram.</div>
                             </div>
-                            <button type="submit" class="btn btn-primary">Enviar Resposta</button>
+                            <div class="d-flex justify-content-between">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-paper-plane me-2"></i>Enviar Resposta
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="insertTemplateBtn">
+                                    <i class="fas fa-clipboard-list me-2"></i>Inserir Template
+                                </button>
+                            </div>
                         </form>
                     </div>
                     {% else %}
                     <div class="alert alert-warning mt-4">
-                        Este ticket está fechado. Não é possível enviar novas respostas.
+                        <i class="fas fa-lock me-2"></i> Este ticket está fechado. Não é possível enviar novas respostas.
+                        <form method="POST" action="{{ url_for('reopen_ticket', ticket_id=ticket.id) }}" class="mt-2 d-inline">
+                            <button type="submit" class="btn btn-sm btn-warning">
+                                <i class="fas fa-unlock me-1"></i>Reabrir Ticket
+                            </button>
+                        </form>
                     </div>
                     {% endif %}
                 </div>
@@ -130,6 +144,84 @@
         // Rola a conversa automaticamente para a última mensagem
         var chatContainer = $('.chat-container');
         chatContainer.scrollTop(chatContainer[0].scrollHeight);
+        
+        // Templates de resposta comuns
+        const responseTemplates = [
+            {
+                name: "Saudação Padrão",
+                text: "Olá! Obrigado por entrar em contato com o suporte da UniTV. Como posso ajudar?"
+            },
+            {
+                name: "Solicitação de Informações",
+                text: "Para que eu possa ajudar melhor, poderia fornecer algumas informações adicionais sobre o problema que está enfrentando?"
+            },
+            {
+                name: "Instruções de Pagamento",
+                text: "Para realizar o pagamento, siga estas etapas no bot:\n1. Clique em 'Minha Conta'\n2. Selecione 'Escolher Plano'\n3. Escolha o plano desejado\n4. Selecione a forma de pagamento\n5. Siga as instruções na tela"
+            },
+            {
+                name: "Problemas de Login",
+                text: "Se estiver tendo problemas para fazer login, tente estas etapas:\n1. Verifique se suas credenciais estão corretas\n2. Certifique-se de que seu plano está ativo\n3. Tente limpar o cache do aplicativo\n4. Reinicie o dispositivo\n\nSe o problema persistir, nos informe para verificarmos."
+            },
+            {
+                name: "Confirmação de Resolução",
+                text: "Seu problema foi resolvido! Se precisar de mais alguma coisa, não hesite em entrar em contato novamente."
+            }
+        ];
+        
+        // Gerencia o botão de template
+        $('#insertTemplateBtn').click(function() {
+            // Cria o modal de seleção de template
+            const modalHTML = `
+                <div class="modal fade" id="templateModal" tabindex="-1" aria-labelledby="templateModalLabel" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="templateModalLabel">Selecionar Template</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="list-group">
+                                    ${responseTemplates.map((template, index) => 
+                                        `<button type="button" class="list-group-item list-group-item-action template-item" 
+                                         data-index="${index}">
+                                            ${template.name}
+                                        </button>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Adiciona o modal ao corpo do documento
+            $('body').append(modalHTML);
+            
+            // Exibe o modal
+            const templateModal = new bootstrap.Modal(document.getElementById('templateModal'));
+            templateModal.show();
+            
+            // Gerencia a seleção de um template
+            $('.template-item').click(function() {
+                const index = $(this).data('index');
+                const templateText = responseTemplates[index].text;
+                
+                // Insere o texto do template no campo de resposta
+                $('#reply_text').val(templateText);
+                
+                // Fecha o modal
+                templateModal.hide();
+                
+                // Remove o modal do DOM após fechamento
+                $('#templateModal').on('hidden.bs.modal', function () {
+                    $(this).remove();
+                });
+            });
+        });
     });
 </script>
 {% endblock %}

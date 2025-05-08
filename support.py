@@ -172,29 +172,41 @@ def reopen_ticket(ticket_id):
     try:
         tickets = read_json_file(TICKETS_FILE)
         
+        # Verifica se o ticket existe na lista de tickets ativos
+        if ticket_id in tickets['active']:
+            # Se o ticket já está ativo, apenas verifica se está fechado
+            if tickets['active'][ticket_id]['status'] == 'closed':
+                tickets['active'][ticket_id]['status'] = 'open'
+                tickets['active'][ticket_id].pop('closed_at', None)
+                tickets['active'][ticket_id].pop('closed_by', None)
+                tickets['active'][ticket_id]['updated_at'] = datetime.now().isoformat()
+                write_json_file(TICKETS_FILE, tickets)
+                return True
+            return True  # Já está aberto
+        
         # Verifica se o ticket existe nos fechados
-        if ticket_id not in tickets['closed']:
-            return False
+        if 'closed' in tickets and ticket_id in tickets['closed']:
+            # Obtém o ticket e atualiza o status
+            ticket = tickets['closed'][ticket_id]
+            ticket['status'] = 'open'
+            ticket['updated_at'] = datetime.now().isoformat()
+            
+            # Remove campos de fechamento
+            if 'closed_at' in ticket:
+                del ticket['closed_at']
+            if 'closed_by' in ticket:
+                del ticket['closed_by']
+            
+            # Move o ticket para a lista de tickets ativos
+            tickets['active'][ticket_id] = ticket
+            del tickets['closed'][ticket_id]
+            
+            # Salva os tickets
+            write_json_file(TICKETS_FILE, tickets)
+            
+            return True
         
-        # Obtém o ticket e atualiza o status
-        ticket = tickets['closed'][ticket_id]
-        ticket['status'] = 'open'
-        ticket['reopened_at'] = datetime.now().isoformat()
-        
-        # Remove campos de fechamento
-        if 'closed_at' in ticket:
-            del ticket['closed_at']
-        if 'closed_by' in ticket:
-            del ticket['closed_by']
-        
-        # Move o ticket para a lista de tickets ativos
-        tickets['active'][ticket_id] = ticket
-        del tickets['closed'][ticket_id]
-        
-        # Salva os tickets
-        write_json_file(TICKETS_FILE, tickets)
-        
-        return True
+        return False  # Ticket não encontrado
     except Exception as e:
         logger.error(f"Error reopening ticket: {e}")
         return False
