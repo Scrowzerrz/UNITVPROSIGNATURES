@@ -3046,9 +3046,10 @@ def create_giveaway_from_menu(call):
 @bot.callback_query_handler(func=lambda call: call.data == "list_giveaways")
 def list_giveaways_from_menu(call):
     # Obter sorteios ativos
-    giveaways = get_giveaways_for_admin()
+    all_giveaways = get_giveaways_for_admin()
+    active_giveaways = all_giveaways.get('active', {})
     
-    if not giveaways:
+    if not active_giveaways:
         bot.edit_message_text(
             "❌ *Nenhum Sorteio Ativo* ❌\n\n"
             "Não há sorteios ativos no momento.",
@@ -3067,8 +3068,8 @@ def list_giveaways_from_menu(call):
     # Criar teclado com botões para cada sorteio
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     
-    for giveaway_id, giveaway in giveaways.items():
-        if giveaway['status'] == 'active':
+    for giveaway_id, giveaway in active_giveaways.items():
+        if giveaway.get('status') == 'active':
             end_date = datetime.fromisoformat(giveaway["ends_at"])
             remaining_time = end_date - datetime.now()
             participants_count = len(giveaway.get('participants', {}))
@@ -3079,7 +3080,7 @@ def list_giveaways_from_menu(call):
             response += f"Ganhadores: {giveaway['winners_count']}\n"
             response += f"Participantes: {participants_count}/{max_participants}\n"
             response += f"Encerra em: {remaining_time.days}d {remaining_time.seconds//3600}h {(remaining_time.seconds%3600)//60}m\n"
-            response += f"Status: {giveaway['status']}\n\n"
+            response += f"Status: {giveaway.get('status')}\n\n"
             
             # Adicionar botões para sortear e cancelar
             keyboard.add(
