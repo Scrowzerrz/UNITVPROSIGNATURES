@@ -421,6 +421,14 @@ def select_plan(call):
     
     logger.info(f"Processing plan selection: {call.data}, parts: {parts}")
     
+    # Verificar se o usuário já tem um pagamento pendente
+    pending_payment = get_user_pending_payment(user_id)
+    if pending_payment:
+        bot.answer_callback_query(call.id, "Você já tem um pagamento pendente!")
+        # Mostrar o pagamento pendente em vez de prosseguir
+        show_pending_payment(call)
+        return
+    
     # Garantir que temos todas as partes necessárias
     if len(parts) < 3:
         bot.answer_callback_query(call.id, "Formato de plano inválido!")

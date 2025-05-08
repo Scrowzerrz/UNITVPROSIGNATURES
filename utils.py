@@ -330,6 +330,28 @@ def create_payment(user_id, plan_type, amount, coupon_code=None):
     payment_id = str(uuid.uuid4())
     payments = read_json_file(PAYMENTS_FILE)
     
+    # Obter o timestamp atual para o momento de criação
+    current_time = datetime.now()
+    
+    # Verificar se o usuário já tem pagamentos pendentes e cancelá-los
+    for existing_payment_id, payment in list(payments.items()):
+        if payment['user_id'] == str(user_id) and payment['status'] == 'pending':
+            logger.info(f"Cancelando pagamento pendente existente {existing_payment_id} para o usuário {user_id}")
+            
+            # Se for um pagamento do Mercado Pago, cancelar na API
+            if payment.get('mp_payment_id'):
+                try:
+                    _cancel_mercado_pago_payment(payment.get('mp_payment_id'))
+                    logger.info(f"Pagamento Mercado Pago {payment.get('mp_payment_id')} cancelado ao criar novo pagamento")
+                except Exception as e:
+                    logger.error(f"Erro ao cancelar pagamento Mercado Pago existente: {e}")
+            
+            # Atualizar o status para cancelado
+            payment['status'] = 'cancelled'
+            payment['cancelled_at'] = current_time.isoformat()
+            payment['cancelled_reason'] = 'Substituído por novo pagamento'
+            payments[existing_payment_id] = payment
+    
     payment_data = {
         'payment_id': payment_id,
         'user_id': str(user_id),
@@ -338,10 +360,11 @@ def create_payment(user_id, plan_type, amount, coupon_code=None):
         'original_amount': amount,
         'coupon_code': coupon_code,
         'status': 'pending',
-        'created_at': datetime.now().isoformat(),
+        'created_at': current_time.isoformat(),
         'approved_at': None,
         'payer_name': '',
-        'login_delivered': False
+        'login_delivered': False,
+        'expiration_notified': False # Para evitar notificações duplicadas de expiração
     }
     
     payments[payment_id] = payment_data
