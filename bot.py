@@ -837,31 +837,21 @@ def send_pix_instructions(message, payment_id):
     else:
         user_id = message.from_user.id
     
-    # Mensagem diferente se o valor for zero
-    if amount <= 0:
-        pix_msg = (
-            f"🏦 *Plano Gratuito* 🏦\n\n"
-            f"Plano: {PLANS[plan_id]['name']}\n"
-            f"Valor: {format_currency(amount)}\n\n"
-            f"Este plano é gratuito, não é necessário realizar pagamento.\n"
-            f"Clique no botão 'Confirmar' abaixo para continuar."
-        )
-    else:
-        pix_msg = (
-            f"🏦 *Informações para Pagamento PIX Manual* 🏦\n\n"
-            f"Plano: {PLANS[plan_id]['name']}\n"
-            f"Valor: {format_currency(amount)}\n\n"
-            f"*Chave PIX:* `{pix_key}`\n\n"
-            f"Nome: {pix_name}\n"
-            f"Banco: {pix_bank}\n\n"
-            f"*Instruções:*\n"
-            f"1. Abra seu aplicativo bancário\n"
-            f"2. Escolha a opção PIX\n"
-            f"3. Cole a chave PIX acima\n"
-            f"4. Informe o valor exato: {format_currency(amount)}\n"
-            f"5. Na descrição, escreva seu ID Telegram: {user_id}\n\n"
-            f"Após realizar o pagamento, clique no botão 'Confirmar Pagamento' abaixo."
-        )
+    pix_msg = (
+        f"🏦 *Informações para Pagamento PIX Manual* 🏦\n\n"
+        f"Plano: {PLANS[plan_id]['name']}\n"
+        f"Valor: {format_currency(amount)}\n\n"
+        f"*Chave PIX:* `{pix_key}`\n\n"
+        f"Nome: {pix_name}\n"
+        f"Banco: {pix_bank}\n\n"
+        f"*Instruções:*\n"
+        f"1. Abra seu aplicativo bancário\n"
+        f"2. Escolha a opção PIX\n"
+        f"3. Cole a chave PIX acima\n"
+        f"4. Informe o valor exato: {format_currency(amount)}\n"
+        f"5. Na descrição, escreva seu ID Telegram: {user_id}\n\n"
+        f"Após realizar o pagamento, clique no botão 'Confirmar Pagamento' abaixo."
+    )
     
     # Create keyboard
     keyboard = types.InlineKeyboardMarkup(row_width=1)
@@ -928,16 +918,6 @@ def pay_with_pix_mercado_pago(call):
     
     plan_id = payment['plan_type']
     amount = payment['amount']
-    
-    # Verificar se o valor é zero ou negativo (não suportado pelo Mercado Pago)
-    from utils import format_currency_api
-    transaction_amount = format_currency_api(amount)
-    if transaction_amount <= 0:
-        bot.answer_callback_query(call.id, "Pagamentos com valor zero não são suportados pelo Mercado Pago.")
-        # Fallback to PIX manual
-        send_pix_instructions(call, payment_id)
-        logger.info(f"Redirecionando para PIX manual devido a valor zero ou negativo: {amount} -> {transaction_amount}")
-        return
     
     # Verificar se já há um pagamento Mercado Pago ativo para este pagamento
     if payment.get('mp_payment_id'):
@@ -1043,8 +1023,6 @@ def pay_with_pix_mercado_pago(call):
     bot_config = read_json_file(BOT_CONFIG_FILE)
     mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
     
-    # Verificação de valor zero já foi realizada no início da função
-    
     # Check if Mercado Pago is enabled
     if not mp_settings.get('enabled') or not mp_settings.get('access_token'):
         bot.answer_callback_query(call.id, "Mercado Pago não está disponível no momento.")
@@ -1065,13 +1043,8 @@ def pay_with_pix_mercado_pago(call):
         access_token = mp_settings.get('access_token')
         
         # Preparar dados do pagamento com expiração de 10 minutos
-        # Garantir que o valor seja um número decimal válido para o Mercado Pago (usando ponto como separador)
-        from utils import format_currency_api
-        transaction_amount = format_currency_api(amount)
-        logger.info(f"Transaction amount: {transaction_amount} (original: {amount})")
-        
         payment_data = {
-            "transaction_amount": transaction_amount,
+            "transaction_amount": float(amount),
             "description": f"UniTV - {PLANS[plan_id]['name']} - ID: {payment_id}",
             "payment_method_id": "pix",
             "payer": {
