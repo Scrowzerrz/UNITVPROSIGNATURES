@@ -370,13 +370,31 @@ def show_plans(call):
     plans_msg = "🛒 *Escolha um plano:* 🛒\n\n"
     
     for plan_id, plan in PLANS.items():
-        price = calculate_plan_price(user_id, plan_id)
+        # Calcular preço do plano e obter informações de desconto
+        price, discount_info = calculate_plan_price(user_id, plan_id)
         is_first_buy = user.get('is_first_buy', True) if user else True
         
         plans_msg += f"*{plan['name']}*\n"
         plans_msg += f"Duração: {plan['duration_days']} dias\n"
         
-        if is_first_buy and plan['first_buy_discount']:
+        # Verificar se há desconto sazonal
+        if 'seasonal_discount' in discount_info:
+            seasonal = discount_info['seasonal_discount']
+            original_price = seasonal['original_price']
+            percent = seasonal['percent']
+            expiration_date = seasonal['expiration_date']
+            
+            # Formatar data de expiração para legibilidade
+            expire_date_str = expiration_date.strftime('%d/%m/%Y')
+            days_left = (expiration_date - datetime.now()).days
+            
+            if is_first_buy and plan['first_buy_discount']:
+                plans_msg += f"Preço: {format_currency(price)} *(Primeira compra!)*\n"
+            else:
+                plans_msg += f"Preço: ~~{format_currency(original_price)}~~ {format_currency(price)} \n"
+            
+            plans_msg += f"*🔥 PROMOÇÃO! {percent}% OFF* - Válido até {expire_date_str} ({days_left} dias restantes)\n"
+        elif is_first_buy and plan['first_buy_discount']:
             plans_msg += f"Preço: {format_currency(price)} *(Primeira compra!)*\n"
         else:
             plans_msg += f"Preço: {format_currency(price)}\n"
@@ -394,9 +412,12 @@ def show_plans(call):
         callback_data = f"select_plan_{safe_plan_id}"
         logger.info(f"Creating plan button with callback_data: {callback_data}")
         
+        # Calcular preço para exibir no botão (usando a versão atualizada que retorna o preço e informações de desconto)
+        price, _ = calculate_plan_price(user_id, plan_id)
+        
         keyboard.add(
             types.InlineKeyboardButton(
-                f"🛍️ {plan['name']} - {format_currency(calculate_plan_price(user_id, plan_id))}",
+                f"🛍️ {plan['name']} - {format_currency(price)}",
                 callback_data=callback_data
             )
         )
@@ -461,8 +482,8 @@ def select_plan(call):
         show_plans(call)
         return
     
-    # Calculate price
-    price = calculate_plan_price(user_id, plan_id)
+    # Calculate price with seasonal discount info
+    price, discount_info = calculate_plan_price(user_id, plan_id)
     
     # Check if user was referred for a discount (not first purchase)
     user = get_user(user_id)

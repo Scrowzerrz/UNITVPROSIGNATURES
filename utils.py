@@ -795,15 +795,77 @@ def format_currency(value):
     return f"R$ {value:.2f}".replace('.', ',')
 
 # Calculate price based on user status and plan
+def get_seasonal_discount_info(plan_type):
+    """
+    Verifica se há descontos sazonais ativos para um plano específico.
+    
+    Args:
+        plan_type (str): O tipo de plano (ex: '30_days', '6_months', '1_year')
+    
+    Returns:
+        tuple: (discount_percent, expiration_date, discount_id) ou (None, None, None) se não houver desconto
+    """
+    try:
+        # Obter descontos sazonais ativos
+        active_discounts = get_active_seasonal_discounts()
+        
+        # Verificar se há descontos aplicáveis ao plano específico
+        for discount_id, discount in active_discounts.items():
+            applicable_plans = discount.get('applicable_plans', [])
+            
+            # Verificar se o desconto se aplica a este plano
+            if not applicable_plans or plan_type in applicable_plans:
+                return (
+                    discount['discount_percent'],
+                    datetime.fromisoformat(discount['expiration_date']),
+                    discount_id
+                )
+        
+        return None, None, None
+    except Exception as e:
+        logger.error(f"Erro ao verificar descontos sazonais: {e}")
+        return None, None, None
+
 def calculate_plan_price(user_id, plan_type):
+    """
+    Calcula o preço de um plano considerando descontos para primeira compra e descontos sazonais.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        plan_type (str): Tipo de plano ('30_days', '6_months', '1_year')
+    
+    Returns:
+        float: Preço final do plano após aplicar descontos
+        dict: Informações sobre o desconto sazonal (se aplicado) ou None
+    """
     user = get_user(user_id)
     plan = PLANS[plan_type]
+    base_price = None
+    discount_info = {}
     
     # Check if user is eligible for first-time buyer discount
     if user and user.get('is_first_buy') and plan['first_buy_discount']:
-        return plan['first_buy_price']
+        base_price = plan['first_buy_price']
+        discount_info['first_buy_discount'] = True
+    else:
+        base_price = plan['regular_price']
     
-    return plan['regular_price']
+    # Check if there are any seasonal discounts applicable
+    discount_percent, expiration_date, discount_id = get_seasonal_discount_info(plan_type)
+    
+    if discount_percent is not None:
+        # Aplicar desconto sazonal
+        discounted_price = base_price * (1 - discount_percent / 100)
+        discount_info['seasonal_discount'] = {
+            'percent': discount_percent,
+            'expiration_date': expiration_date,
+            'discount_id': discount_id,
+            'original_price': base_price,
+            'discounted_price': discounted_price
+        }
+        return discounted_price, discount_info
+    
+    return base_price, discount_info
 
 # Apply referral discount if applicable
 def apply_referral_discount(user_id, amount):
