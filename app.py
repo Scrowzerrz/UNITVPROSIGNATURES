@@ -10,21 +10,10 @@ from config import (
     USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, SESSION_FILE,
     PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
 )
-
-# Imports de módulos refatorados
-from db_utils import read_json_file, write_json_file
-
-from login_service import add_login
-
-from coupon_service import add_coupon, delete_coupon, add_seasonal_discount, remove_seasonal_discount
-
-from payment_service import (
-    resume_sales, suspend_sales, sales_enabled, format_currency
-)
-
-from user_service import (
-    is_admin_telegram_id, is_allowed_telegram_id, create_session, 
-    get_session, delete_session, create_auth_token, verify_auth_token,
+from utils import (
+    read_json_file, write_json_file, add_login, add_coupon, delete_coupon,
+    resume_sales, suspend_sales, sales_enabled, format_currency, create_auth_token, verify_auth_token,
+    is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session,
     generate_access_code, verify_access_code, list_active_access_codes
 )
 
@@ -288,26 +277,7 @@ def user_detail(user_id):
             user_payments.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
         # Obter descontos sazonais ativos
-        bot_config = read_json_file(BOT_CONFIG_FILE)
-        all_seasonal_discounts = bot_config.get('seasonal_discounts', {})
-        seasonal_discounts = {}
-        current_time = datetime.now()
-        
-        # Filtrar apenas os descontos ativos
-        for discount_id, discount in all_seasonal_discounts.items():
-            # Verificar se o desconto ainda está válido
-            if 'expires_at' in discount:
-                try:
-                    expiration_date = datetime.fromisoformat(discount['expires_at'])
-                    if current_time > expiration_date:
-                        # Desconto expirado, pular
-                        continue
-                    
-                    # Adicionar à lista de descontos ativos
-                    seasonal_discounts[discount_id] = discount
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Erro ao processar data de expiração do desconto {discount_id}: {e}")
-                    continue
+        seasonal_discounts = get_active_seasonal_discounts()
         
         return render_template('users.html', user=user, user_id=user_id, payments=user_payments,
                                seasonal_discounts=seasonal_discounts, plans=PLANS)
@@ -594,29 +564,13 @@ def coupons():
             coupon['uses_formatted'] = f"{coupon['uses']} / {coupon['max_uses']}"
     
     # Obter descontos sazonais ativos
-    bot_config = read_json_file(BOT_CONFIG_FILE)
-    all_seasonal_discounts = bot_config.get('seasonal_discounts', {})
-    seasonal_discounts = {}
-    current_time = datetime.now()
+    seasonal_discounts = get_active_seasonal_discounts()
     
-    # Filtrar apenas os descontos ativos
-    for discount_id, discount in all_seasonal_discounts.items():
-        # Verificar se o desconto ainda está válido
-        if 'expires_at' in discount:
-            try:
-                expiration_date = datetime.fromisoformat(discount['expires_at'])
-                if current_time > expiration_date:
-                    # Desconto expirado, pular
-                    continue
-                
-                # Adicionar à lista de descontos ativos
-                seasonal_discounts[discount_id] = discount
-                discount['expiration_date'] = discount['expires_at']  # Para compatibilidade
-                discount['expiration_formatted'] = expiration_date.strftime('%d/%m/%Y')
-                discount['days_left'] = (expiration_date - current_time).days
-            except (ValueError, TypeError) as e:
-                logger.error(f"Erro ao processar data de expiração do desconto {discount_id}: {e}")
-                continue
+    # Formatar dados dos descontos sazonais para exibição
+    for discount_id, discount in seasonal_discounts.items():
+        expiration_date = datetime.fromisoformat(discount['expiration_date'])
+        discount['expiration_formatted'] = expiration_date.strftime('%d/%m/%Y')
+        discount['days_left'] = (expiration_date - datetime.now()).days
         
         # Formatar lista de planos aplicáveis
         plan_names = []

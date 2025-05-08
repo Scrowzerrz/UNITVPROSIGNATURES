@@ -13,35 +13,16 @@ from config import (
     BOT_TOKEN, ADMIN_ID, PLANS, USERS_FILE, PAYMENTS_FILE,
     LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE
 )
-
-# Imports de módulos refatorados
-from db_utils import read_json_file, write_json_file
-
-from user_service import (
-    get_user, create_user, save_user, assign_plan_to_user, 
-    process_successful_referral, apply_referral_discount, 
-    get_expiring_subscriptions, is_admin_telegram_id, 
-    is_allowed_telegram_id, add_allowed_telegram_id,
-    remove_allowed_telegram_id, create_auth_token, 
-    generate_access_code
-)
-
-from payment_service import (
-    create_payment, update_payment, get_payment, cancel_payment,
-    get_pending_approvals, get_users_waiting_for_login,
-    check_should_suspend_sales, suspend_sales, resume_sales,
-    sales_enabled, format_currency, calculate_plan_price,
-    assign_login_to_user, get_user_pending_payment
-)
-
-from mercado_pago_service import (
-    cancel_payment_in_mercado_pago as _cancel_mercado_pago_payment
-)
-
-from login_service import get_available_login, add_login
-
-from coupon_service import (
-    add_coupon, validate_coupon, use_coupon, delete_coupon
+from utils import (
+    get_user, create_user, save_user, create_payment, update_payment,
+    get_payment, cancel_payment, get_pending_approvals, get_users_waiting_for_login,
+    check_should_suspend_sales, suspend_sales, resume_sales, sales_enabled,
+    format_currency, calculate_plan_price, get_available_login, add_login,
+    assign_login_to_user, get_user_pending_payment, add_coupon, validate_coupon,
+    use_coupon, delete_coupon, apply_referral_discount, process_successful_referral,
+    get_expiring_subscriptions, read_json_file, write_json_file,
+    create_auth_token, is_admin_telegram_id, is_allowed_telegram_id,
+    add_allowed_telegram_id, remove_allowed_telegram_id, generate_access_code
 )
 
 # Configure logging
@@ -54,19 +35,13 @@ bot = telebot.TeleBot(BOT_TOKEN)
 # Background tasks
 def check_login_availability():
     """Check if logins are available, notify admin if they're running low, and check for expired payments"""
-    logger.info("Starting background task: check_login_availability")
     while True:
         try:
             logins = read_json_file(LOGINS_FILE)
             bot_config = read_json_file(BOT_CONFIG_FILE)
             
-            if not isinstance(logins, dict):
-                logger.error(f"Error: logins is not a dictionary: {type(logins)}")
-                logins = {'30_days': [], '6_months': [], '1_year': []}
-                write_json_file(LOGINS_FILE, logins)
-            
             # Calculate total logins
-            total_logins = sum(len(logins.get(plan_type, [])) for plan_type in logins)
+            total_logins = sum(len(logins[plan_type]) for plan_type in logins)
             
             # If no logins available and sales are still enabled
             if total_logins == 0 and bot_config.get('sales_enabled', True):
@@ -104,14 +79,10 @@ def check_login_availability():
             if waiting_users:
                 # Check if there are logins for these users
                 for payment in waiting_users:
-                    plan_type = payment.get('plan_type')
-                    user_id = payment.get('user_id')
-                    payment_id = payment.get('payment_id')
+                    plan_type = payment['plan_type']
+                    user_id = payment['user_id']
+                    payment_id = payment['payment_id']
                     
-                    if not all([plan_type, user_id, payment_id]):
-                        logger.error(f"Invalid payment data: {payment}")
-                        continue
-                        
                     login = get_available_login(plan_type)
                     if login:
                         # Assign login to user
@@ -146,14 +117,10 @@ def check_login_availability():
             # Check for expiring subscriptions
             expiring_subs = get_expiring_subscriptions(days_threshold=3)
             for sub in expiring_subs:
-                user_id = sub.get('user_id')
-                days_left = sub.get('days_left')
-                plan_type = sub.get('plan_type')
+                user_id = sub['user_id']
+                days_left = sub['days_left']
+                plan_type = sub['plan_type']
                 
-                if not all([user_id, days_left, plan_type]):
-                    logger.error(f"Invalid subscription data: {sub}")
-                    continue
-                    
                 # Check if notification was already sent
                 user = get_user(user_id)
                 if user and not user.get('expiration_notified'):
@@ -188,44 +155,37 @@ def check_login_availability():
             current_time = datetime.now()
             payments_updated = False
             
-            if isinstance(payments, dict):
-                for payment_id, payment in payments.items():
-                    if isinstance(payment, dict) and payment.get('status') == 'pending' and payment.get('mp_payment_id'):
-                        # Verificar se o pagamento já passou do tempo limite (10 minutos)
-                        if 'created_at' in payment:
+            for payment_id, payment in payments.items():
+                if payment['status'] == 'pending' and payment.get('mp_payment_id'):
+                    # Verificar se o pagamento já passou do tempo limite (10 minutos)
+                    if 'created_at' in payment:
+                        created_at = datetime.fromisoformat(payment['created_at'])
+                        expiration_time = created_at + timedelta(minutes=10)
+                        
+                        if current_time > expiration_time:
+                            logger.info(f"Pagamento expirado encontrado: {payment_id}, Mercado Pago ID: {payment.get('mp_payment_id')}")
+                            
+                            # Cancelar o pagamento no Mercado Pago
+                            if _cancel_mercado_pago_payment(payment.get('mp_payment_id')):
+                                logger.info(f"Pagamento Mercado Pago {payment.get('mp_payment_id')} cancelado por tempo expirado")
+                            
+                            # Atualizar status para expirado
+                            payment['status'] = 'expired'
+                            payments[payment_id] = payment
+                            payments_updated = True
+                            
+                            # Notificar o usuário
                             try:
-                                created_at = datetime.fromisoformat(payment['created_at'])
-                                expiration_time = created_at + timedelta(minutes=10)
-                                
-                                if current_time > expiration_time:
-                                    logger.info(f"Pagamento expirado encontrado: {payment_id}, Mercado Pago ID: {payment.get('mp_payment_id')}")
-                                    
-                                    # Cancelar o pagamento no Mercado Pago
-                                    if _cancel_mercado_pago_payment(payment.get('mp_payment_id')):
-                                        logger.info(f"Pagamento Mercado Pago {payment.get('mp_payment_id')} cancelado por tempo expirado")
-                                    
-                                    # Atualizar status para expirado
-                                    payment['status'] = 'expired'
-                                    payments[payment_id] = payment
-                                    payments_updated = True
-                                    
-                                    # Notificar o usuário
-                                    try:
-                                        user_id = payment.get('user_id')
-                                        if user_id:
-                                            bot.send_message(
-                                                user_id,
-                                                f"⏰ *Pagamento PIX Expirado* ⏰\n\n"
-                                                f"O QR Code PIX para seu pagamento expirou após 10 minutos.\n"
-                                                f"Para tentar novamente, inicie um novo pagamento usando o comando /start.",
-                                                parse_mode="Markdown"
-                                            )
-                                    except Exception as e:
-                                        logger.error(f"Erro ao notificar usuário sobre pagamento expirado: {e}")
-                            except ValueError as e:
-                                logger.error(f"Formato de data inválido para pagamento {payment_id}: {e}")
-            else:
-                logger.error(f"Payments is not a dictionary: {type(payments)}")
+                                user_id = payment['user_id']
+                                bot.send_message(
+                                    user_id,
+                                    f"⏰ *Pagamento PIX Expirado* ⏰\n\n"
+                                    f"O QR Code PIX para seu pagamento expirou após 10 minutos.\n"
+                                    f"Para tentar novamente, inicie um novo pagamento usando o comando /start.",
+                                    parse_mode="Markdown"
+                                )
+                            except Exception as e:
+                                logger.error(f"Erro ao notificar usuário sobre pagamento expirado: {e}")
             
             # Salvar pagamentos atualizados, se necessário
             if payments_updated:
@@ -233,8 +193,6 @@ def check_login_availability():
         
         except Exception as e:
             logger.error(f"Error in background task: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
         
         # Run every 5 minutes
         time.sleep(300)
