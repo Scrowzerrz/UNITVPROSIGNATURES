@@ -65,6 +65,84 @@ def write_json_file(file_path, data):
 def get_user(user_id):
     users = read_json_file(USERS_FILE)
     return users.get(str(user_id))
+    
+def get_user_plans(user_id, include_inactive=False):
+    """
+    Obtém os planos de um usuário.
+    Suporta tanto o novo formato de múltiplos planos quanto o formato antigo.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        include_inactive (bool): Se True, inclui planos inativos/expirados
+        
+    Returns:
+        list: Lista de planos do usuário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            return []
+            
+        plans_list = []
+        
+        # Se o usuário tiver a estrutura de múltiplos planos
+        if 'plans' in user:
+            for plan in user['plans']:
+                if include_inactive or plan.get('active', False):
+                    plans_list.append(plan)
+        # Compatibilidade com o formato antigo
+        elif user.get('has_active_plan') and user.get('plan_type') and user.get('plan_expiration'):
+            # Criar um "pseudo-plano" baseado nos dados antigos
+            plans_list.append({
+                'id': 'legacy-plan',  # ID fictício para planos antigos
+                'plan_type': user['plan_type'],
+                'expiration_date': user['plan_expiration'],
+                'login_info': user.get('login_info'),
+                'active': True
+            })
+        # Se o usuário não tem plano ativo mas include_inactive é True e há um registro de plano anterior
+        elif include_inactive and not user.get('has_active_plan') and user.get('plan_type') and user.get('plan_expiration'):
+            plans_list.append({
+                'id': 'legacy-plan-expired',
+                'plan_type': user['plan_type'],
+                'expiration_date': user['plan_expiration'],
+                'login_info': user.get('login_info'),
+                'active': False
+            })
+            
+        return plans_list
+    except Exception as e:
+        logger.error(f"Error getting plans for user {user_id}: {e}")
+        return []
+
+def get_user_active_plans_count(user_id):
+    """
+    Obtém a contagem de planos ativos de um usuário.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        
+    Returns:
+        int: Número de planos ativos do usuário
+    """
+    return len(get_user_plans(user_id, include_inactive=False))
+    
+def get_user_plan_by_id(user_id, plan_id):
+    """
+    Obtém um plano específico de um usuário pelo ID do plano.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        plan_id (str): ID do plano a ser obtido
+        
+    Returns:
+        dict: Dados do plano ou None se não encontrado
+    """
+    plans = get_user_plans(user_id, include_inactive=True)
+    for plan in plans:
+        if plan.get('id') == plan_id:
+            return plan
+    return None
 
 def save_user(user_id, user_data):
     users = read_json_file(USERS_FILE)
@@ -373,22 +451,86 @@ def get_active_seasonal_discounts():
         return {}
 
 def create_user(user_id, username, first_name, last_name=None, referred_by=None):
+    """
+    Cria um novo usuário com a estrutura atualizada para múltiplos planos.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        username (str): Nome de usuário
+        first_name (str): Primeiro nome
+        last_name (str, optional): Sobrenome
+        referred_by (str, optional): ID do usuário que fez a indicação
+        
+    Returns:
+        dict: Dados do usuário criado
+    """
     user_data = {
         'username': username,
         'first_name': first_name,
         'last_name': last_name,
         'created_at': datetime.now().isoformat(),
         'has_active_plan': False,
-        'plan_type': None,
-        'plan_expiration': None,
-        'login_info': None,
+        'plan_type': None,  # Mantido para compatibilidade
+        'plan_expiration': None,  # Mantido para compatibilidade
+        'login_info': None,  # Mantido para compatibilidade
         'is_first_buy': True,
         'referrals': [],
         'referred_by': referred_by,
-        'successful_referrals': 0
+        'successful_referrals': 0,
+        'plans': []  # Nova estrutura para múltiplos planos
     }
     save_user(user_id, user_data)
     return user_data
+    
+def migrate_user_to_multi_plan(user_id):
+    """
+    Migra um usuário do formato antigo (plano único) para o novo formato (múltiplos planos).
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        
+    Returns:
+        bool: True se a migração foi bem-sucedida, False caso contrário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            logger.error(f"User {user_id} not found in migrate_user_to_multi_plan")
+            return False
+            
+        # Se o usuário já tem a estrutura de planos, não precisa migrar
+        if 'plans' in user:
+            return True
+            
+        # Inicializar a lista de planos
+        user['plans'] = []
+        
+        # Se o usuário tem um plano ativo, migrá-lo para a nova estrutura
+        if user.get('has_active_plan') and user.get('plan_type') and user.get('plan_expiration'):
+            plan_id = str(uuid.uuid4())
+            
+            # Criar o plano migrado
+            migrated_plan = {
+                'id': plan_id,
+                'plan_type': user['plan_type'],
+                'created_at': user.get('plan_assigned_at', datetime.now().isoformat()),
+                'expiration_date': user['plan_expiration'],
+                'login_info': user.get('login_info'),
+                'expiration_notified': user.get('expiration_notified', False),
+                'active': True,
+                'migrated_from_legacy': True
+            }
+            
+            # Adicionar o plano migrado à lista de planos
+            user['plans'].append(migrated_plan)
+            
+        # Salvar as alterações
+        save_user(user_id, user)
+        logger.info(f"User {user_id} successfully migrated to multi-plan format")
+        return True
+    except Exception as e:
+        logger.error(f"Error migrating user {user_id} to multi-plan format: {e}")
+        return False
 
 # Payment management functions
 def create_payment(user_id, plan_type, amount, coupon_code=None):
@@ -610,6 +752,18 @@ def remove_login(plan_type, login_data):
     return False
 
 def assign_login_to_user(user_id, plan_type, payment_id):
+    """
+    Atribui um login a um usuário após pagamento.
+    Agora suporta múltiplos planos/logins por usuário.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        plan_type (str): Tipo de plano ('30_days', '6_months', '1_year')
+        payment_id (str): ID do pagamento associado
+        
+    Returns:
+        dict: Informações de login ou False se falhar
+    """
     user = get_user(user_id)
     login = get_available_login(plan_type)
     
@@ -621,30 +775,57 @@ def assign_login_to_user(user_id, plan_type, payment_id):
         logger.error(f"No available login for plan type {plan_type}")
         return False
     
-    # Update user with the login and plan information
+    # Obter informações do plano
     plan_info = PLANS[plan_type]
     expiration_date = datetime.now() + timedelta(days=plan_info['duration_days'])
     
+    # Se o usuário ainda não possui a estrutura 'plans', inicializá-la
+    if 'plans' not in user:
+        user['plans'] = []
+    
+    # Gerar um ID único para este plano
+    plan_id = str(uuid.uuid4())
+    
+    # Criar o novo plano
+    new_plan = {
+        'id': plan_id,
+        'plan_type': plan_type,
+        'created_at': datetime.now().isoformat(),
+        'expiration_date': expiration_date.isoformat(),
+        'login_info': login,
+        'payment_id': payment_id,
+        'expiration_notified': False,
+        'active': True
+    }
+    
+    # Adicionar o novo plano à lista de planos do usuário
+    user['plans'].append(new_plan)
+    
+    # Atualizar o status geral do usuário para indicar que tem pelo menos um plano ativo
     user['has_active_plan'] = True
+    
+    # Manter os campos antigos por compatibilidade, eles refletem o plano mais recente
     user['plan_type'] = plan_type
     user['plan_expiration'] = expiration_date.isoformat()
     user['login_info'] = login
     user['is_first_buy'] = False
     
+    # Salvar as alterações no usuário
     save_user(user_id, user)
     
-    # Update payment status
+    # Atualizar o status do pagamento
     update_payment(payment_id, {
         'status': 'completed',
         'approved_at': datetime.now().isoformat(),
-        'login_delivered': True
+        'login_delivered': True,
+        'plan_id': plan_id  # Armazenar o ID do plano no pagamento para referência
     })
     
-    # Remove the login from available logins
+    # Remover o login da lista de logins disponíveis
     remove_login(plan_type, login)
     
-    # Process referral if applicable
-    if user['referred_by']:
+    # Processar referência, se aplicável
+    if user.get('referred_by'):
         process_successful_referral(user['referred_by'])
     
     return login
@@ -896,23 +1077,103 @@ def delete_coupon(code):
 
 # Check for expiring subscriptions
 def get_expiring_subscriptions(days_threshold=3):
+    """
+    Obtém uma lista de usuários com assinaturas prestes a expirar.
+    Suporta múltiplos planos por usuário.
+    
+    Args:
+        days_threshold (int): Limite de dias para considerar um plano como prestes a expirar
+        
+    Returns:
+        list: Lista de planos expirando por usuário
+    """
     users = read_json_file(USERS_FILE)
-    expiring_users = []
+    expiring_plans = []
     
     for user_id, user_data in users.items():
-        if user_data.get('has_active_plan') and user_data.get('plan_expiration'):
-            expiration_date = datetime.fromisoformat(user_data['plan_expiration'])
-            days_left = (expiration_date - datetime.now()).days
-            
-            if 0 < days_left <= days_threshold:
-                expiring_users.append({
-                    'user_id': user_id,
-                    'days_left': days_left,
-                    'plan_type': user_data['plan_type'],
-                    'expiration_date': user_data['plan_expiration']
-                })
+        # Se o usuário tiver a estrutura de múltiplos planos
+        if 'plans' in user_data and user_data.get('has_active_plan'):
+            for plan in user_data['plans']:
+                # Verificar apenas planos ativos que ainda não foram notificados
+                if plan.get('active') and not plan.get('expiration_notified'):
+                    try:
+                        if not plan.get('expiration_date'):
+                            continue
+                            
+                        expiration_date = datetime.fromisoformat(plan['expiration_date'])
+                        days_left = (expiration_date - datetime.now()).days
+                        
+                        if 0 < days_left <= days_threshold:
+                            expiring_plans.append({
+                                'user_id': user_id,
+                                'plan_id': plan.get('id'),
+                                'days_left': days_left,
+                                'plan_type': plan.get('plan_type'),
+                                'login_info': plan.get('login_info'),
+                                'expiration_date': plan['expiration_date']
+                            })
+                    except Exception as e:
+                        logger.error(f"Error checking plan expiration: {e}")
+        # Compatibilidade com o formato antigo
+        elif user_data.get('has_active_plan') and user_data.get('plan_expiration'):
+            try:
+                expiration_date = datetime.fromisoformat(user_data['plan_expiration'])
+                days_left = (expiration_date - datetime.now()).days
+                
+                if 0 < days_left <= days_threshold and not user_data.get('expiration_notified', False):
+                    expiring_plans.append({
+                        'user_id': user_id,
+                        'plan_id': None,  # Planos antigos não têm ID
+                        'days_left': days_left,
+                        'plan_type': user_data['plan_type'],
+                        'login_info': user_data.get('login_info'),
+                        'expiration_date': user_data['plan_expiration']
+                    })
+            except Exception as e:
+                logger.error(f"Error checking subscription expiration: {e}")
     
-    return expiring_users
+    return expiring_plans
+    
+def mark_expiration_notified(user_id, plan_id=None):
+    """
+    Marca um plano como notificado após enviar o aviso de expiração.
+    Suporta tanto o novo formato de múltiplos planos quanto o formato antigo.
+    
+    Args:
+        user_id (str): ID do usuário no Telegram
+        plan_id (str, optional): ID do plano específico. Se None, usa o formato antigo.
+        
+    Returns:
+        bool: True se a atualização foi feita com sucesso, False caso contrário
+    """
+    try:
+        user = get_user(user_id)
+        if not user:
+            logger.error(f"User {user_id} not found in mark_expiration_notified")
+            return False
+            
+        if plan_id and 'plans' in user:
+            # Formato novo - atualizar plano específico
+            plan_found = False
+            for i, plan in enumerate(user['plans']):
+                if plan.get('id') == plan_id:
+                    user['plans'][i]['expiration_notified'] = True
+                    plan_found = True
+                    break
+                    
+            if not plan_found:
+                logger.error(f"Plan {plan_id} not found for user {user_id}")
+                return False
+        else:
+            # Formato antigo - atualizar campo a nível de usuário
+            user['expiration_notified'] = True
+            
+        # Salvar alterações
+        save_user(user_id, user)
+        return True
+    except Exception as e:
+        logger.error(f"Error marking expiration notification for user {user_id}: {e}")
+        return False
 
 # Format currency values
 def format_currency(value):
