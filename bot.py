@@ -2956,11 +2956,29 @@ def back_to_start(call):
             parse_mode="Markdown"
         )
 
+# Track if the bot is already running
+_bot_running = False
+
 # Main function to start bot
 def run_bot():
+    global _bot_running
+    
+    # Prevent multiple instances
+    if _bot_running:
+        logger.warning("Bot is already running, skipping additional initialization")
+        return
+        
+    _bot_running = True
     logger.info("Starting Telegram bot...")
     start_background_tasks()
-    bot.infinity_polling()
+    
+    try:
+        bot.infinity_polling()
+    except Exception as e:
+        _bot_running = False
+        logger.error(f"Bot polling error: {e}")
+    finally:
+        _bot_running = False
 
 if __name__ == "__main__":
     run_bot()
