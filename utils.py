@@ -794,6 +794,10 @@ def get_expiring_subscriptions(days_threshold=3):
 def format_currency(value):
     return f"R$ {value:.2f}".replace('.', ',')
 
+# Format currency values for API usage (Mercado Pago requires decimal point)
+def format_currency_api(value):
+    return float(value)
+
 # Calculate price based on user status and plan
 def calculate_plan_price(user_id, plan_type):
     user = get_user(user_id)

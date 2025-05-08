@@ -929,6 +929,16 @@ def pay_with_pix_mercado_pago(call):
     plan_id = payment['plan_type']
     amount = payment['amount']
     
+    # Verificar se o valor é zero ou negativo (não suportado pelo Mercado Pago)
+    from utils import format_currency_api
+    transaction_amount = format_currency_api(amount)
+    if transaction_amount <= 0:
+        bot.answer_callback_query(call.id, "Pagamentos com valor zero não são suportados pelo Mercado Pago.")
+        # Fallback to PIX manual
+        send_pix_instructions(call, payment_id)
+        logger.info(f"Redirecionando para PIX manual devido a valor zero ou negativo: {amount} -> {transaction_amount}")
+        return
+    
     # Verificar se já há um pagamento Mercado Pago ativo para este pagamento
     if payment.get('mp_payment_id'):
         # Mostrar mensagem temporária enquanto processa
@@ -1033,13 +1043,7 @@ def pay_with_pix_mercado_pago(call):
     bot_config = read_json_file(BOT_CONFIG_FILE)
     mp_settings = bot_config.get('payment_settings', {}).get('mercado_pago', {})
     
-    # Verificar se o valor é zero ou negativo (não suportado pelo Mercado Pago)
-    if amount <= 0:
-        bot.answer_callback_query(call.id, "Pagamentos com valor zero não são suportados pelo Mercado Pago.")
-        # Fallback to PIX manual
-        send_pix_instructions(call, payment_id)
-        logger.info(f"Redirecionando para PIX manual devido a valor zero: {amount}")
-        return
+    # Verificação de valor zero já foi realizada no início da função
     
     # Check if Mercado Pago is enabled
     if not mp_settings.get('enabled') or not mp_settings.get('access_token'):
@@ -1061,8 +1065,13 @@ def pay_with_pix_mercado_pago(call):
         access_token = mp_settings.get('access_token')
         
         # Preparar dados do pagamento com expiração de 10 minutos
+        # Garantir que o valor seja um número decimal válido para o Mercado Pago (usando ponto como separador)
+        from utils import format_currency_api
+        transaction_amount = format_currency_api(amount)
+        logger.info(f"Transaction amount: {transaction_amount} (original: {amount})")
+        
         payment_data = {
-            "transaction_amount": float(amount),
+            "transaction_amount": transaction_amount,
             "description": f"UniTV - {PLANS[plan_id]['name']} - ID: {payment_id}",
             "payment_method_id": "pix",
             "payer": {
