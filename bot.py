@@ -2208,6 +2208,52 @@ def resume_sales_command(message):
         "As vendas foram retomadas com sucesso.",
         parse_mode="Markdown"
     )
+    
+@bot.message_handler(commands=['verificar_pagamentos', 'fixpayments'])
+def fix_payments_command(message):
+    # Check if admin
+    if message.from_user.id != ADMIN_ID:
+        bot.reply_to(message, "⛔ Comando exclusivo para administradores.")
+        return
+    
+    # Enviar mensagem de processamento
+    bot.reply_to(message, 
+        "🔍 *Verificando pagamentos inconsistentes...*\n\n"
+        "Este processo pode levar alguns segundos.",
+        parse_mode="Markdown"
+    )
+    
+    # Corrigir pagamentos inconsistentes
+    try:
+        fixed_count = fix_inconsistent_payments()
+        
+        if fixed_count > 0:
+            bot.send_message(
+                message.chat.id,
+                f"✅ *Correção Concluída* ✅\n\n"
+                f"Foram corrigidos {fixed_count} pagamentos inconsistentes.\n\n"
+                f"Problemas corrigidos:\n"
+                f"- Pagamentos 'fantasma' (aprovados mas sem entrega)\n"
+                f"- Usuários sem estrutura de múltiplos planos\n"
+                f"- Pagamentos muito antigos",
+                parse_mode="Markdown"
+            )
+        else:
+            bot.send_message(
+                message.chat.id,
+                "✅ *Verificação Concluída* ✅\n\n"
+                "Não foram encontrados pagamentos inconsistentes no sistema.\n"
+                "Todos os pagamentos estão em ordem.",
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        logger.error(f"Erro ao corrigir pagamentos: {e}")
+        bot.send_message(
+            message.chat.id,
+            f"❌ *Erro* ❌\n\n"
+            f"Ocorreu um erro ao tentar corrigir os pagamentos:\n`{str(e)}`",
+            parse_mode="Markdown"
+        )
 
 @bot.message_handler(commands=['criar_cupom'])
 def create_coupon_command(message):

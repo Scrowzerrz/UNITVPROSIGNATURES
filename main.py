@@ -36,6 +36,9 @@ def start_bot():
 # Import the Flask app
 from app import app
 
+# Executar a correção de pagamentos inconsistentes na inicialização
+check_and_fix_inconsistent_payments()
+
 # Start bot in a background thread
 if BOT_TOKEN:
     logger.info("Initializing Telegram bot thread...")
