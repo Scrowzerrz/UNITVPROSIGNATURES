@@ -572,7 +572,7 @@ def use_coupon_callback(call):
     except ValueError:
         # If price conversion fails, recalculate it
         logger.error(f"Error converting price {data_parts[3]} to float")
-        price, _ = calculate_plan_price(call.from_user.id, plan_id)
+        price = calculate_plan_price(call.from_user.id, plan_id)
         logger.info(f"Recalculated price: {price}")
     
     # Check if user is eligible to use coupons (not first purchase)
@@ -710,7 +710,7 @@ def confirm_plan(call):
     except ValueError:
         # If price conversion fails, recalculate it
         logger.error(f"Error converting price {data_parts[3]} to float")
-        price, _ = calculate_plan_price(call.from_user.id, plan_id)
+        price = calculate_plan_price(call.from_user.id, plan_id)
         logger.info(f"Recalculated price: {price}")
     
     coupon_code = data_parts[4] if len(data_parts) > 4 else None
