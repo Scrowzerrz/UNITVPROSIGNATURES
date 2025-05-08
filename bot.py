@@ -2941,7 +2941,7 @@ def support_faq_callback(call):
     )
 
 
-# Iniciar novo ticket de suporte
+# Iniciar novo ticket de suporte - com suporte a edição de mensagens
 @bot.callback_query_handler(func=lambda call: call.data == "support_new_ticket")
 def support_new_ticket_callback(call):
     user_id = call.from_user.id
@@ -2951,41 +2951,73 @@ def support_new_ticket_callback(call):
     # Verificar limite de tickets abertos (máximo 3)
     active_tickets = get_user_active_tickets(user_id)
     if len(active_tickets) >= 3:
-        bot.send_message(
-            call.message.chat.id,
-            "⚠️ *Limite de Tickets Atingido* ⚠️\n\n"
-            "Você já possui 3 tickets abertos. Por favor, aguarde a resposta ou feche "
-            "algum ticket existente antes de abrir um novo.",
-            parse_mode="Markdown",
-            reply_markup=types.InlineKeyboardMarkup().add(
-                types.InlineKeyboardButton("🎫 Ver Meus Tickets", callback_data="view_my_tickets"),
-                types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+        try:
+            # Tentar editar a mensagem existente em vez de enviar nova
+            bot.edit_message_text(
+                "⚠️ *Limite de Tickets Atingido* ⚠️\n\n"
+                "Você já possui 3 tickets abertos. Por favor, aguarde a resposta ou feche "
+                "algum ticket existente antes de abrir um novo.",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode="Markdown",
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton("🎫 Ver Meus Tickets", callback_data="view_my_tickets"),
+                    types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Erro ao editar mensagem de limite de tickets: {e}")
+            # Fallback para envio de nova mensagem
+            bot.send_message(
+                call.message.chat.id,
+                "⚠️ *Limite de Tickets Atingido* ⚠️\n\n"
+                "Você já possui 3 tickets abertos. Por favor, aguarde a resposta ou feche "
+                "algum ticket existente antes de abrir um novo.",
+                parse_mode="Markdown",
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton("🎫 Ver Meus Tickets", callback_data="view_my_tickets"),
+                    types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+                )
+            )
         return
     
-    # Pedir descrição do problema
-    msg = bot.send_message(
-        call.message.chat.id,
-        "🎫 *Novo Ticket de Suporte* 🎫\n\n"
-        "Por favor, descreva seu problema ou dúvida em detalhes.\n"
-        "Seja específico para podermos ajudar melhor!\n\n"
-        "*Dica:* Se estiver com problemas de login, informe seu login e quais dispositivos está usando.\n\n"
-        "Para cancelar, envie /cancelar",
-        parse_mode="Markdown"
-    )
+    # Pedir descrição do problema - editando a mensagem existente
+    try:
+        msg = bot.edit_message_text(
+            "🎫 *Novo Ticket de Suporte* 🎫\n\n"
+            "Por favor, descreva seu problema ou dúvida em detalhes.\n"
+            "Seja específico para podermos ajudar melhor!\n\n"
+            "*Dica:* Se estiver com problemas de login, informe seu login e quais dispositivos está usando.\n\n"
+            "Para cancelar, envie /cancelar",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao editar mensagem para novo ticket: {e}")
+        # Fallback para envio de nova mensagem
+        msg = bot.send_message(
+            call.message.chat.id,
+            "🎫 *Novo Ticket de Suporte* 🎫\n\n"
+            "Por favor, descreva seu problema ou dúvida em detalhes.\n"
+            "Seja específico para podermos ajudar melhor!\n\n"
+            "*Dica:* Se estiver com problemas de login, informe seu login e quais dispositivos está usando.\n\n"
+            "Para cancelar, envie /cancelar",
+            parse_mode="Markdown"
+        )
     
     # Registrar próximo handler
     bot.register_next_step_handler(msg, process_new_ticket_message)
 
 
-# Processar mensagem para novo ticket
+# Processar mensagem para novo ticket - com suporte a edição de mensagens
 def process_new_ticket_message(message):
     user_id = message.from_user.id
     
     # Verificar se o usuário cancelou
     if message.text == '/cancelar':
-        bot.send_message(
+        # Enviar resposta direta (não podemos editar a mensagem do usuário)
+        msg = bot.send_message(
             message.chat.id,
             "❌ Operação cancelada pelo usuário.",
             reply_markup=types.InlineKeyboardMarkup().add(
@@ -2999,7 +3031,8 @@ def process_new_ticket_message(message):
         ticket_message = message.text.strip()
         
         if not ticket_message or len(ticket_message) < 5:
-            bot.send_message(
+            # Mensagem muito curta, solicitando mais detalhes
+            msg = bot.send_message(
                 message.chat.id,
                 "⚠️ Por favor, forneça uma descrição mais detalhada do seu problema.",
                 reply_markup=types.InlineKeyboardMarkup().add(
@@ -3010,23 +3043,32 @@ def process_new_ticket_message(message):
             return
             
         # Criando o ticket
-        ticket_id = create_support_ticket(user_id, ticket_message)
+        ticket_id = create_support_ticket(user_id, ticket_message, message.message_id)
         
         if ticket_id:
             # Ticket criado com sucesso
-            bot.send_message(
-                message.chat.id,
+            confirmation_text = (
                 f"✅ *Ticket #{ticket_id} Criado com Sucesso!* ✅\n\n"
                 f"Nossa equipe de suporte irá analisar seu problema e responder em breve.\n"
                 f"Você receberá uma notificação quando houver uma resposta.\n\n"
                 f"*Seu ticket:*\n"
-                f"```\n{ticket_message[:100]}{'...' if len(ticket_message) > 100 else ''}\n```",
+                f"```\n{ticket_message[:100]}{'...' if len(ticket_message) > 100 else ''}\n```"
+            )
+            
+            # Enviar mensagem de confirmação e salvar seu ID
+            sent_msg = bot.send_message(
+                message.chat.id,
+                confirmation_text,
                 parse_mode="Markdown",
                 reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
                     types.InlineKeyboardButton("🎫 Ver Meus Tickets", callback_data="view_my_tickets"),
                     types.InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="start")
                 )
             )
+            
+            # Salvar ID da mensagem para referência futura
+            if sent_msg:
+                update_ticket_message_id(ticket_id, 'user', sent_msg.message_id)
         else:
             # Erro ao criar ticket
             bot.send_message(
@@ -3249,7 +3291,7 @@ def reply_ticket_callback(call):
     bot.register_next_step_handler(msg, process_ticket_reply, ticket_id)
 
 
-# Processar resposta do usuário a um ticket
+# Processar resposta do usuário a um ticket - otimizado para editar mensagens
 def process_ticket_reply(message, ticket_id):
     user_id = message.from_user.id
     
@@ -3296,17 +3338,60 @@ def process_ticket_reply(message, ticket_id):
     
     # Adicionar resposta ao ticket
     if add_message_to_ticket(ticket_id, 'user', user_id, message.text):
-        bot.send_message(
-            message.chat.id,
+        response_text = (
             f"✅ *Resposta Enviada com Sucesso!* ✅\n\n"
             f"Sua resposta foi adicionada ao ticket #{ticket_id}.\n"
-            f"Nossa equipe de suporte será notificada e responderá em breve.",
-            parse_mode="Markdown",
-            reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
-                types.InlineKeyboardButton("🎫 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
-                types.InlineKeyboardButton("🔙 Voltar aos Meus Tickets", callback_data="view_my_tickets")
-            )
+            f"Nossa equipe de suporte será notificada e responderá em breve."
         )
+        
+        # Verificar se já existe uma mensagem para editar
+        ticket_message_id = get_ticket_message_id(ticket_id, 'user')
+        
+        try:
+            if ticket_message_id:
+                # Tentar editar a mensagem existente
+                bot.edit_message_text(
+                    response_text,
+                    message.chat.id,
+                    ticket_message_id,
+                    parse_mode="Markdown",
+                    reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
+                        types.InlineKeyboardButton("🎫 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+                        types.InlineKeyboardButton("🔙 Voltar aos Meus Tickets", callback_data="view_my_tickets")
+                    )
+                )
+            else:
+                # Enviar nova mensagem
+                sent_msg = bot.send_message(
+                    message.chat.id,
+                    response_text,
+                    parse_mode="Markdown",
+                    reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
+                        types.InlineKeyboardButton("🎫 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+                        types.InlineKeyboardButton("🔙 Voltar aos Meus Tickets", callback_data="view_my_tickets")
+                    )
+                )
+                # Salvar o ID da mensagem para uso futuro
+                if sent_msg:
+                    update_ticket_message_id(ticket_id, 'user', sent_msg.message_id)
+        except Exception as e:
+            logger.error(f"Erro ao editar mensagem existente para ticket {ticket_id}: {e}")
+            # Fallback para envio de nova mensagem
+            sent_msg = bot.send_message(
+                message.chat.id,
+                response_text,
+                parse_mode="Markdown",
+                reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
+                    types.InlineKeyboardButton("🎫 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+                    types.InlineKeyboardButton("🔙 Voltar aos Meus Tickets", callback_data="view_my_tickets")
+                )
+            )
+            # Atualizar ID da mensagem
+            if sent_msg:
+                update_ticket_message_id(ticket_id, 'user', sent_msg.message_id)
+        
+        # Notificar administradores sobre a nova resposta
+        notify_admins_about_ticket_reply(ticket_id, user_id, message.text)
     else:
         bot.send_message(
             message.chat.id,
