@@ -1,8 +1,23 @@
 {
     "sales_enabled": true,
-    "warning_sent": false,
-    "sales_suspended_time": null,
-    "coupons": {},
+    "warning_sent": true,
+    "sales_suspended_time": "2025-05-08T13:02:50.139842",
+    "coupons": {
+        "LONT65": {
+            "code": "LONT65",
+            "discount_type": "percentage",
+            "discount_value": 65.0,
+            "expiration_date": "2025-05-11T00:00:00",
+            "max_uses": 10,
+            "min_purchase": 0.0,
+            "applicable_plans": [
+                "6_months",
+                "1_year"
+            ],
+            "uses": 0,
+            "users": []
+        }
+    },
     "referral_rewards": {
         "referrer_discount": 10,
         "referred_discount": 5,
@@ -22,15 +37,5 @@
         }
     },
     "pending_payment_notified": true,
-    "seasonal_discounts": {
-        "a50b3fe6-7d42-4465-97e2-ce188b91a2f0": {
-            "discount_percent": 10,
-            "expiration_date": "2025-06-02T12:45:49.488946",
-            "applicable_plans": [
-                "6_months",
-                "1_year"
-            ],
-            "created_at": "2025-05-08T12:45:49.488955"
-        }
-    }
+    "seasonal_discounts": {}
 }
