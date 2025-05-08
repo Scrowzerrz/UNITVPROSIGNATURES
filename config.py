@@ -27,7 +27,7 @@ PLANS = {
     '30_days': {
         'name': 'Plano 30 Dias',
         'duration_days': 30,
-        'first_buy_price': 9.00,
+        'first_buy_price': 0.50,
         'regular_price': 20.00,
         'first_buy_discount': True
     },
