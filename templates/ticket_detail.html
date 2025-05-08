@@ -76,21 +76,27 @@
                     <h6 class="m-0 font-weight-bold text-primary">Conversa</h6>
                 </div>
                 <div class="card-body">
-                    <div class="chat-container" style="max-height: 400px; overflow-y: auto;">
+                    <div class="chat-container p-3" style="max-height: 500px; overflow-y: auto; border: 1px solid #e3e6f0; border-radius: 0.35rem; background-color: #f8f9fc;">
                         {% for message in ticket.messages %}
-                        <div class="chat-message mb-3 {{ 'text-right' if message.from_type == 'admin' else '' }}">
-                            <div class="message-header mb-1">
-                                <small class="text-muted">
-                                    {{ message.timestamp|replace("T", " ") }} - 
-                                    {% if message.from_type == 'admin' %}
-                                        <strong class="text-primary">Administrador</strong>
-                                    {% else %}
-                                        <strong class="text-success">{{ ticket.user_name }}</strong>
-                                    {% endif %}
-                                </small>
-                            </div>
-                            <div class="message-content p-3 {{ 'bg-light' if message.from_type == 'user' else 'bg-primary text-white' }}" style="border-radius: 10px; display: inline-block; max-width: 80%;">
-                                {{ message.text|replace('\n', '<br>')|safe }}
+                        <div class="chat-message mb-3 d-flex {{ 'justify-content-end' if message.from_type == 'admin' else 'justify-content-start' }}">
+                            <div style="max-width: 80%;">
+                                <div class="message-header mb-1 {{ 'text-end' if message.from_type == 'admin' else '' }}">
+                                    <small class="text-muted">
+                                        {% if message.from_type == 'admin' %}
+                                            <strong class="text-primary">Administrador</strong>
+                                        {% else %}
+                                            <strong class="text-success">{{ ticket.user_name }}</strong>
+                                        {% endif %}
+                                        - {{ message.timestamp|replace("T", " ")|truncate(16, true, "") }}
+                                        {% if not message.read %}
+                                            <span class="badge bg-warning text-dark ms-1">Não lida</span>
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <div class="message-content p-3 {{ 'bg-light' if message.from_type == 'user' else 'bg-primary text-white' }}" 
+                                     style="border-radius: 10px; display: inline-block; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);">
+                                    {{ message.text|replace('\n', '<br>')|safe }}
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
