@@ -122,8 +122,6 @@ def _cancel_mercado_pago_payment(mp_payment_id):
         bool: True se o cancelamento foi bem-sucedido, False caso contrário
     """
     try:
-        import requests
-        
         if not mp_payment_id:
             logger.error("Tentativa de cancelar pagamento sem ID do Mercado Pago")
             return False
