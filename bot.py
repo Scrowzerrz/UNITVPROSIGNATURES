@@ -2259,7 +2259,8 @@ def process_ticket_reply_user(message, ticket_id):
     
     # Adicionar mensagem ao ticket
     if add_message_to_ticket(ticket_id, user_id, 'user', text):
-        # Resposta ao usuário
+        # Resposta ao usuário - editar a mensagem original quando possível
+        ticket_message_id = get_ticket_message_id(ticket_id, 'user')
         keyboard = types.InlineKeyboardMarkup(row_width=1)
         keyboard.add(
             types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
@@ -2267,14 +2268,42 @@ def process_ticket_reply_user(message, ticket_id):
             types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start")
         )
         
-        bot.send_message(
-            user_id,
+        response_text = (
             f"✅ *Resposta enviada com sucesso!* ✅\n\n"
             f"Sua resposta foi adicionada ao ticket #{ticket_id}. "
-            f"Nossa equipe de suporte será notificada.",
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            f"Nossa equipe de suporte será notificada."
         )
+        
+        try:
+            # Tenta editar a mensagem existente, se houver
+            if ticket_message_id:
+                bot.edit_message_text(
+                    response_text,
+                    user_id,
+                    ticket_message_id,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                # Se não houver mensagem anterior, envia uma nova
+                sent_msg = bot.send_message(
+                    user_id,
+                    response_text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                # Salva o ID da mensagem para referência futura
+                update_ticket_message_id(ticket_id, 'user', sent_msg.message_id)
+        except Exception as e:
+            logger.error(f"Erro ao editar/enviar mensagem de ticket: {e}")
+            # Fallback: enviar nova mensagem em caso de erro
+            sent_msg = bot.send_message(
+                user_id,
+                response_text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            update_ticket_message_id(ticket_id, 'user', sent_msg.message_id)
         
         # Notificar administradores
         notify_admins_about_ticket_reply(ticket_id, user_id, text)
@@ -2285,13 +2314,13 @@ def process_ticket_reply_user(message, ticket_id):
             parse_mode="Markdown"
         )
 
-# Notificar administradores sobre uma resposta a um ticket
+# Atualizado para usar edição de mensagens
 def notify_admins_about_ticket_reply(ticket_id, user_id, text):
     # Obter informações do usuário
     user = get_user(user_id)
     user_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() if user else f"User {user_id}"
     
-    # Notificar admin principal
+    # Mensagem para o admin principal
     admin_msg = (
         f"🔔 *Nova Resposta em Ticket* 🔔\n\n"
         f"*Ticket #*: {ticket_id}\n"
@@ -2305,12 +2334,42 @@ def notify_admins_about_ticket_reply(ticket_id, user_id, text):
     )
     
     try:
-        bot.send_message(
-            ADMIN_ID,
-            admin_msg,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
+        # Verificar se existe um ID de mensagem para editar
+        admin_message_id = get_ticket_message_id(ticket_id, 'admin_notification')
+        
+        if admin_message_id:
+            # Editar mensagem existente
+            try:
+                bot.edit_message_text(
+                    admin_msg,
+                    ADMIN_ID,
+                    admin_message_id,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            except Exception as edit_error:
+                logger.error(f"Erro ao editar mensagem de admin para ticket {ticket_id}: {edit_error}")
+                # Se falhar a edição, envia uma nova mensagem
+                sent_msg = bot.send_message(
+                    ADMIN_ID,
+                    admin_msg,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                # Atualiza ID da mensagem
+                if sent_msg:
+                    update_ticket_message_id(ticket_id, 'admin_notification', sent_msg.message_id)
+        else:
+            # Enviar nova mensagem
+            sent_msg = bot.send_message(
+                ADMIN_ID,
+                admin_msg,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            # Guardar ID da mensagem para referência futura
+            if sent_msg:
+                update_ticket_message_id(ticket_id, 'admin_notification', sent_msg.message_id)
     except Exception as e:
         logger.error(f"Erro ao notificar admin sobre resposta em ticket: {e}")
 
@@ -2376,21 +2435,50 @@ def process_ticket_reply_admin(message, ticket_id):
     user_id = ticket['user_id']
     
     # Adicionar mensagem ao ticket
-    if add_message_to_ticket(ticket_id, admin_id, 'admin', text):
-        # Resposta ao admin
+    if add_message_to_ticket(ticket_id, admin_id, 'admin', text, message.message_id):
+        # Resposta ao admin - editar a mensagem original quando possível
+        ticket_message_id = get_ticket_message_id(ticket_id, 'admin')
         keyboard = types.InlineKeyboardMarkup(row_width=1)
         keyboard.add(
             types.InlineKeyboardButton("📋 Ver Todos os Tickets", callback_data="admin_view_tickets"),
             types.InlineKeyboardButton("🔒 Fechar Ticket", callback_data=f"admin_close_ticket_{ticket_id}")
         )
         
-        bot.send_message(
-            admin_id,
+        response_text = (
             f"✅ *Resposta enviada com sucesso!* ✅\n\n"
-            f"Sua resposta foi adicionada ao ticket #{ticket_id} e o usuário será notificado.",
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            f"Sua resposta foi adicionada ao ticket #{ticket_id} e o usuário será notificado."
         )
+        
+        try:
+            # Tenta editar a mensagem existente, se houver
+            if ticket_message_id:
+                bot.edit_message_text(
+                    response_text,
+                    admin_id,
+                    ticket_message_id,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                # Se não houver mensagem anterior, envia uma nova
+                sent_msg = bot.send_message(
+                    admin_id,
+                    response_text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                # Salva o ID da mensagem para referência futura
+                update_ticket_message_id(ticket_id, 'admin', sent_msg.message_id)
+        except Exception as e:
+            logger.error(f"Erro ao editar/enviar mensagem de ticket para admin: {e}")
+            # Fallback: enviar nova mensagem em caso de erro
+            sent_msg = bot.send_message(
+                admin_id,
+                response_text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            update_ticket_message_id(ticket_id, 'admin', sent_msg.message_id)
         
         # Notificar usuário
         notify_user_about_ticket_reply(ticket_id, user_id, text)
@@ -2463,19 +2551,48 @@ def notify_user_about_ticket_reply(ticket_id, user_id, text, ticket_status=None)
             f"```\n{text_to_send}\n```"
         )
         
-        # Enviar uma única mensagem com cabeçalho, conteúdo e botões
-        # Utilizamos parse_mode Markdown para formatação correta
-        message = bot.send_message(
-            user_id,
-            header,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
+        # Verificar se já existe uma mensagem para editar
+        ticket_message_id = get_ticket_message_id(ticket_id, 'user')
+        
+        try:
+            if ticket_message_id:
+                # Tenta editar a mensagem existente
+                bot.edit_message_text(
+                    header,
+                    user_id,
+                    ticket_message_id,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                message = None  # Indica que usamos edição
+            else:
+                # Envia uma nova mensagem
+                message = bot.send_message(
+                    user_id,
+                    header,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                # Salva o ID da mensagem para uso futuro
+                if message:
+                    update_ticket_message_id(ticket_id, 'user', message.message_id)
+        except Exception as e:
+            logger.error(f"Erro ao editar mensagem existente, enviando nova: {e}")
+            # Fallback para envio de nova mensagem
+            message = bot.send_message(
+                user_id,
+                header,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            # Atualiza o ID da mensagem
+            if message:
+                update_ticket_message_id(ticket_id, 'user', message.message_id)
         
         # Se a mensagem for muito longa e foi truncada, enviar o restante
         if len(text) > 3000:
             # Enviar mensagem de continuação
-            bot.send_message(
+            continuation_msg = bot.send_message(
                 user_id,
                 "⬇️ *Continuação da mensagem* ⬇️",
                 parse_mode="Markdown"

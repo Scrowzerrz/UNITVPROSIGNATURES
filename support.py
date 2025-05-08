@@ -12,13 +12,14 @@ logger = logging.getLogger(__name__)
 # Funções de gerenciamento de tickets de suporte
 # ====================================================
 
-def create_support_ticket(user_id, message_text):
+def create_support_ticket(user_id, message_text, message_id=None):
     """
     Cria um novo ticket de suporte.
     
     Args:
         user_id (int): ID do usuário no Telegram
         message_text (str): Texto da mensagem inicial do ticket
+        message_id (int, optional): ID da mensagem atual no Telegram, para referência
         
     Returns:
         str: ID do ticket criado ou None em caso de erro
@@ -57,8 +58,13 @@ def create_support_ticket(user_id, message_text):
             ],
             'admin_notified': False,
             'admin_replies': 0,
-            'user_replies': 1
+            'user_replies': 1,
+            'message_tracking': {}  # Para rastrear IDs de mensagens do Telegram
         }
+        
+        # Se fornecido um message_id, salva para rastreamento
+        if message_id:
+            new_ticket['message_tracking']['user_main_message_id'] = message_id
         
         # Adiciona o ticket aos tickets ativos
         tickets['active'][ticket_id] = new_ticket
@@ -71,7 +77,7 @@ def create_support_ticket(user_id, message_text):
         logger.error(f"Error creating support ticket: {e}")
         return None
 
-def add_message_to_ticket(ticket_id, from_id, from_type, message_text):
+def add_message_to_ticket(ticket_id, from_id, from_type, message_text, message_id=None):
     """
     Adiciona uma mensagem a um ticket existente.
     
@@ -80,6 +86,7 @@ def add_message_to_ticket(ticket_id, from_id, from_type, message_text):
         from_id (int): ID de quem enviou a mensagem
         from_type (str): 'user' ou 'admin'
         message_text (str): Texto da mensagem
+        message_id (int, optional): ID da mensagem no Telegram, para rastreamento
         
     Returns:
         bool: True se adicionado com sucesso, False caso contrário
@@ -104,6 +111,15 @@ def add_message_to_ticket(ticket_id, from_id, from_type, message_text):
         
         tickets['active'][ticket_id]['messages'].append(new_message)
         tickets['active'][ticket_id]['updated_at'] = now
+        
+        # Se não existir a estrutura de rastreamento de mensagens, cria-a
+        if 'message_tracking' not in tickets['active'][ticket_id]:
+            tickets['active'][ticket_id]['message_tracking'] = {}
+        
+        # Se fornecido um message_id, salva para rastreamento
+        if message_id:
+            key = f"{from_type}_message_id"
+            tickets['active'][ticket_id]['message_tracking'][key] = message_id
         
         # Atualiza contadores
         if from_type == 'admin':
@@ -394,6 +410,66 @@ def get_all_admin_ids():
         # Fallback para o admin principal
         from config import ADMIN_ID
         return [ADMIN_ID] if ADMIN_ID else []
+
+
+def update_ticket_message_id(ticket_id, user_type, message_id):
+    """
+    Atualiza o ID da mensagem do Telegram para um determinado ticket.
+    
+    Args:
+        ticket_id (str): ID do ticket
+        user_type (str): 'user' ou 'admin'
+        message_id (int): ID da mensagem no Telegram
+        
+    Returns:
+        bool: True se atualizado com sucesso, False caso contrário
+    """
+    try:
+        tickets = read_json_file(TICKETS_FILE)
+        
+        # Verifica se o ticket existe
+        if ticket_id not in tickets['active']:
+            return False
+        
+        # Certifica-se de que a estrutura de rastreamento existe
+        if 'message_tracking' not in tickets['active'][ticket_id]:
+            tickets['active'][ticket_id]['message_tracking'] = {}
+        
+        # Atualiza o ID da mensagem
+        key = f"{user_type}_message_id"
+        tickets['active'][ticket_id]['message_tracking'][key] = message_id
+        
+        # Salva os tickets
+        write_json_file(TICKETS_FILE, tickets)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error updating ticket message ID: {e}")
+        return False
+
+
+def get_ticket_message_id(ticket_id, user_type):
+    """
+    Obtém o ID da mensagem do Telegram para um determinado ticket.
+    
+    Args:
+        ticket_id (str): ID do ticket
+        user_type (str): 'user' ou 'admin'
+        
+    Returns:
+        int: ID da mensagem ou None se não encontrado
+    """
+    try:
+        ticket = get_ticket(ticket_id)
+        
+        if not ticket or 'message_tracking' not in ticket:
+            return None
+        
+        key = f"{user_type}_message_id"
+        return ticket['message_tracking'].get(key)
+    except Exception as e:
+        logger.error(f"Error getting ticket message ID: {e}")
+        return None
 
 
 def notify_admins_about_ticket_reply(ticket_id, user_id, message_text):
