@@ -1126,6 +1126,14 @@ def is_admin_telegram_id(telegram_id):
         
     return False
 
+def is_root_admin(telegram_id):
+    """Check if a Telegram ID is the root admin (set in .env)"""
+    # Convert to string for comparison
+    telegram_id = str(telegram_id)
+    
+    # Check primary admin ID from environment variable
+    return telegram_id == str(ADMIN_ID)
+
 def is_allowed_telegram_id(telegram_id):
     """Check if a Telegram ID is allowed to access the admin panel"""
     # Admins always have access
@@ -1141,6 +1149,48 @@ def is_allowed_telegram_id(telegram_id):
     if 'allowed_telegram_ids' in auth_data:
         return telegram_id in auth_data['allowed_telegram_ids']
         
+    return False
+
+def add_admin_telegram_id(telegram_id):
+    """Add a Telegram ID to the admin list (can only be done by root admin)"""
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for storage consistency
+    telegram_id = str(telegram_id)
+    
+    # Ensure the admin_telegram_ids list exists
+    if 'admin_telegram_ids' not in auth_data:
+        auth_data['admin_telegram_ids'] = []
+    
+    # Add to admin list if not already there
+    if telegram_id not in auth_data['admin_telegram_ids'] and telegram_id != str(ADMIN_ID):
+        auth_data['admin_telegram_ids'].append(telegram_id)
+        write_json_file(AUTH_FILE, auth_data)
+        return True
+    
+    return False
+
+def remove_admin_telegram_id(telegram_id):
+    """Remove a Telegram ID from the admin list (can only be done by root admin)"""
+    auth_data = read_json_file(AUTH_FILE)
+    
+    # Convert to string for storage consistency
+    telegram_id = str(telegram_id)
+    
+    # Cannot remove root admin
+    if telegram_id == str(ADMIN_ID):
+        return False
+    
+    # Ensure the admin_telegram_ids list exists
+    if 'admin_telegram_ids' not in auth_data:
+        return False
+    
+    # Remove from admin list if present
+    if telegram_id in auth_data['admin_telegram_ids']:
+        auth_data['admin_telegram_ids'].remove(telegram_id)
+        write_json_file(AUTH_FILE, auth_data)
+        return True
+    
     return False
 
 def add_allowed_telegram_id(telegram_id):
