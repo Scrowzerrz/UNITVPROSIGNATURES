@@ -1518,8 +1518,9 @@ def view_ticket(ticket_id):
 @login_required
 def reply_to_ticket(ticket_id):
     try:
-        # Obter a resposta
+        # Obter a resposta e outras opções
         reply_text = request.form.get('reply_text')
+        close_after_reply = request.form.get('close_after_reply') == '1'
         
         if not reply_text:
             flash('A resposta não pode estar vazia.', 'warning')
@@ -1536,24 +1537,45 @@ def reply_to_ticket(ticket_id):
         success = add_message_to_ticket(ticket_id, telegram_id, 'admin', reply_text)
         
         if success:
-            flash('Resposta enviada com sucesso.', 'success')
-            
-            # Importar função para notificar o usuário pelo Telegram
+            # Notificar o usuário pelo Telegram
             try:
                 # Importando a função do bot
                 from bot import notify_user_about_ticket_reply
                 
                 # Notificar o usuário via Telegram
                 user_id = ticket['user_id']
-                notify_user_about_ticket_reply(ticket_id, user_id, reply_text)
+                # Adicionar informação se o ticket será fechado
+                message_text = reply_text
+                if close_after_reply:
+                    message_text += "\n\n⚠️ *Este ticket foi fechado pelo administrador.*\n\nVocê pode criar um novo ticket se precisar de mais assistência."
+                
+                # Enviar notificação ao usuário
+                notify_user_about_ticket_reply(ticket_id, user_id, message_text)
                 logger.info(f"Usuário {user_id} notificado sobre resposta ao ticket {ticket_id}")
+                flash('Resposta enviada com sucesso e usuário notificado via Telegram.', 'success')
             except Exception as notification_error:
                 logger.error(f"Erro ao notificar usuário via Telegram: {notification_error}")
-                # Não retornamos erro ao admin, pois a resposta foi salva com sucesso
+                flash('Resposta enviada com sucesso, mas ocorreu um erro ao notificar o usuário via Telegram.', 'warning')
+            
+            # Fechar o ticket se a opção estiver marcada
+            if close_after_reply:
+                try:
+                    close_success = close_ticket(ticket_id, 'admin')
+                    if close_success:
+                        flash('Ticket fechado com sucesso após resposta.', 'success')
+                    else:
+                        flash('Resposta enviada, mas ocorreu um erro ao fechar o ticket.', 'warning')
+                except Exception as close_error:
+                    logger.error(f"Erro ao fechar ticket após resposta: {close_error}")
+                    flash('Resposta enviada, mas ocorreu um erro ao fechar o ticket.', 'warning')
         else:
             flash('Erro ao enviar resposta. Tente novamente.', 'danger')
         
-        return redirect(url_for('view_ticket', ticket_id=ticket_id))
+        # Redirecionar de acordo com o estado do ticket
+        if close_after_reply:
+            return redirect(url_for('support_dashboard'))
+        else:
+            return redirect(url_for('view_ticket', ticket_id=ticket_id))
     except Exception as e:
         logger.error(f"Error replying to ticket: {e}")
         flash('Erro ao responder ao ticket. Tente novamente.', 'danger')
