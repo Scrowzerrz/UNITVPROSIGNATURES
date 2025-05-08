@@ -692,6 +692,7 @@ def add_coupon_route():
     discount_value = request.form.get('discount_value')
     expiration_date = request.form.get('expiration_date')
     max_uses = request.form.get('max_uses')
+    max_uses_per_user = request.form.get('max_uses_per_user')
     min_purchase = request.form.get('min_purchase')
     applicable_plans = request.form.getlist('applicable_plans')
     
@@ -704,10 +705,17 @@ def add_coupon_route():
     try:
         discount_value = float(discount_value)
         
+        # Processar valor máximo de usos totais
         if max_uses == 'unlimited':
             max_uses = -1
         else:
             max_uses = int(max_uses)
+        
+        # Processar valor máximo de usos por usuário
+        if not max_uses_per_user or max_uses_per_user == 'unlimited':
+            max_uses_per_user = -1
+        else:
+            max_uses_per_user = int(max_uses_per_user)
             
         min_purchase = float(min_purchase) if min_purchase else 0
         
@@ -727,7 +735,7 @@ def add_coupon_route():
     # Add coupon
     success, message = add_coupon(
         code, discount_type, discount_value, expiration_date,
-        max_uses, min_purchase, applicable_plans
+        max_uses, max_uses_per_user, min_purchase, applicable_plans
     )
     
     if success:

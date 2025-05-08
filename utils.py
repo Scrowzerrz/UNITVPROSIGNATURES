@@ -649,7 +649,23 @@ def sales_enabled():
     return bot_config.get('sales_enabled', True)
 
 # Coupon management functions
-def add_coupon(code, discount_type, discount_value, expiration_date, max_uses, min_purchase, applicable_plans):
+def add_coupon(code, discount_type, discount_value, expiration_date, max_uses, max_uses_per_user, min_purchase, applicable_plans):
+    """
+    Adiciona um novo cupom de desconto ao sistema.
+    
+    Args:
+        code (str): Código do cupom
+        discount_type (str): Tipo de desconto ('percentage' ou 'fixed')
+        discount_value (float): Valor do desconto
+        expiration_date (str): Data de expiração em formato ISO
+        max_uses (int): Máximo de usos totais (-1 para ilimitado)
+        max_uses_per_user (int): Máximo de usos por usuário (-1 para ilimitado)
+        min_purchase (float): Valor mínimo de compra para aplicar o cupom
+        applicable_plans (list): Lista de planos aplicáveis
+    
+    Returns:
+        tuple: (bool, str) Sucesso e mensagem
+    """
     bot_config = read_json_file(BOT_CONFIG_FILE)
     
     # Convert to uppercase for consistency
@@ -677,10 +693,11 @@ def add_coupon(code, discount_type, discount_value, expiration_date, max_uses, m
         'discount_value': discount_value,
         'expiration_date': expiration_date,
         'max_uses': max_uses,
+        'max_uses_per_user': max_uses_per_user,
         'min_purchase': min_purchase,
         'applicable_plans': applicable_plans,
         'uses': 0,
-        'users': []
+        'usage_history': {} # Formato: {"user_id": count}
     }
     
     if 'coupons' not in bot_config:
@@ -713,9 +730,18 @@ def validate_coupon(code, user_id, plan_type, amount):
     if coupon['max_uses'] != -1 and coupon['uses'] >= coupon['max_uses']:
         return None, "Este cupom atingiu o limite máximo de usos."
     
-    # Check user already used
-    if str(user_id) in coupon['users']:
-        return None, "Você já utilizou este cupom anteriormente."
+    # Verificar limite de usos por usuário
+    user_id_str = str(user_id)
+    
+    if 'usage_history' in coupon:
+        # Nova estrutura de contagem de usos
+        user_usage_count = coupon['usage_history'].get(user_id_str, 0)
+        if coupon['max_uses_per_user'] != -1 and user_usage_count >= coupon['max_uses_per_user']:
+            return None, f"Você já atingiu o limite máximo de {coupon['max_uses_per_user']} uso(s) deste cupom."
+    else:
+        # Compatibilidade com a estrutura antiga (apenas verifica se já usou)
+        if str(user_id) in coupon.get('users', []):
+            return None, "Você já utilizou este cupom anteriormente."
     
     # Check minimum purchase
     if coupon['min_purchase'] and amount < coupon['min_purchase']:
@@ -747,14 +773,47 @@ def validate_coupon(code, user_id, plan_type, amount):
     }, "Cupom aplicado com sucesso!"
 
 def use_coupon(code, user_id):
+    """
+    Registra o uso de um cupom por um usuário.
+    
+    Args:
+        code (str): Código do cupom
+        user_id (str): ID do usuário que utilizou o cupom
+    
+    Returns:
+        bool: True se o cupom foi utilizado com sucesso, False caso contrário
+    """
+    user_id_str = str(user_id)
     code = code.upper()
     bot_config = read_json_file(BOT_CONFIG_FILE)
     
     if 'coupons' in bot_config and code in bot_config['coupons']:
         coupon = bot_config['coupons'][code]
+        
+        # Incrementar contador global de usos
         coupon['uses'] += 1
-        coupon['users'].append(str(user_id))
+        
+        # Verificar se estamos usando o novo formato de rastreamento
+        if 'usage_history' in coupon:
+            # Incrementar uso para esse usuário específico
+            if user_id_str in coupon['usage_history']:
+                coupon['usage_history'][user_id_str] += 1
+            else:
+                coupon['usage_history'][user_id_str] = 1
+        else:
+            # Compatibilidade com sistema antigo
+            if 'users' not in coupon:
+                coupon['users'] = []
+            if user_id_str not in coupon['users']:
+                coupon['users'].append(user_id_str)
+                
+            # Criar o campo usage_history para migração gradual
+            coupon['usage_history'] = {}
+            for user in coupon['users']:
+                coupon['usage_history'][user] = 1
+        
         write_json_file(BOT_CONFIG_FILE, bot_config)
+        logger.info(f"Coupon {code} used by user {user_id_str}. Total uses: {coupon['uses']}")
         return True
     
     return False
