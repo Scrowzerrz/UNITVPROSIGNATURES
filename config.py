@@ -16,6 +16,7 @@ BOT_CONFIG_FILE = f'{DATA_DIR}/bot_config.json'
 AUTH_FILE = f'{DATA_DIR}/auth.json'
 SESSION_FILE = f'{DATA_DIR}/sessions.json'
 GIVEAWAYS_FILE = f'{DATA_DIR}/giveaways.json'
+TICKETS_FILE = f'{DATA_DIR}/tickets.json'
 
 # Session configurations
 SESSION_EXPIRY_HOURS = 24
@@ -118,6 +119,15 @@ def init_json_files():
             json.dump({
                 'active': {},
                 'completed': {},
+                'current_id': 0
+            }, f, indent=4)
+    
+    # Create tickets.json if it doesn't exist (para armazenar tickets de suporte)
+    if not os.path.exists(TICKETS_FILE):
+        with open(TICKETS_FILE, 'w') as f:
+            json.dump({
+                'active': {},
+                'closed': {},
                 'current_id': 0
             }, f, indent=4)
 

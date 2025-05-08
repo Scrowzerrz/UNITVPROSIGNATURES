@@ -8,7 +8,7 @@ import hashlib
 from datetime import datetime, timedelta
 from config import (
     USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, SESSION_FILE,
-    GIVEAWAYS_FILE, PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
+    GIVEAWAYS_FILE, TICKETS_FILE, PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
 )
 
 # Configure logging

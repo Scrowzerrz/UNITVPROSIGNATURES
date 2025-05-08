@@ -28,6 +28,12 @@ from utils import (
     redraw_giveaway, confirm_giveaway_win, check_expired_confirmations,
     notify_users_about_giveaway
 )
+from support import (
+    create_support_ticket, add_message_to_ticket, close_ticket, reopen_ticket,
+    get_ticket, get_user_active_tickets, get_all_active_tickets,
+    mark_ticket_messages_as_read, get_unread_ticket_count,
+    get_tickets_needing_admin_notification
+)
 
 # Função para resolver pagamentos fantasmas
 def fix_inconsistent_payments():
