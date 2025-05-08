@@ -111,32 +111,61 @@
                 
                 <!-- Status cards -->
                 <div class="row">
-                    <!-- Support Ticket Card - Moved to first position for greater visibility -->
+                    <!-- Support Ticket Card - Destaque para tickets não lidos -->
                     <div class="col-md-6 col-xl-3 mb-4">
-                        <div class="card border-left-danger shadow h-100 py-2 support-card">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col-auto">
-                                        <i class="fas fa-headset fa-2x text-danger"></i>
-                                    </div>
-                                    <div class="col ml-3">
-                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                            Tickets não lidos
+                        {% if stats.unread_tickets > 0 %}
+                            <!-- Card com animação quando há tickets não lidos -->
+                            <div class="card border-left-danger shadow h-100 py-2 support-card animate__animated animate__headShake animate__slow animate__infinite">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col-auto pulse-notification">
+                                            <i class="fas fa-headset fa-2x text-danger"></i>
                                         </div>
-                                        <div class="h5 mb-0 font-weight-bold">
-                                            {{ stats.unread_tickets }}
-                                            {% if stats.unread_tickets > 0 %}
-                                              <span class="badge bg-danger ms-2 animate__animated animate__pulse animate__infinite">Novo</span>
-                                            {% endif %}
+                                        <div class="col ml-3">
+                                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                                Tickets não lidos
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold">
+                                                {{ stats.unread_tickets }}
+                                                <span class="badge bg-danger ms-2 animate__animated animate__pulse animate__infinite">Novo</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                <div class="alert alert-ticket-notification mb-0 py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <a href="{{ url_for('support_dashboard') }}" class="text-white text-decoration-none">
+                                            <strong>Responder tickets <i class="fas fa-arrow-right ms-1"></i></strong>
+                                        </a>
+                                        <span class="badge bg-light text-danger">{{ stats.unread_tickets }}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="card-footer bg-danger bg-opacity-10">
-                                <a href="{{ url_for('support_dashboard') }}" class="text-danger text-decoration-none">
-                                    <small>Ver tickets <i class="fas fa-arrow-right ms-1"></i></small>
-                                </a>
+                        {% else %}
+                            <!-- Card normal quando não há tickets não lidos -->
+                            <div class="card border-left-danger shadow h-100 py-2 support-card">
+                                <div class="card-body">
+                                    <div class="row no-gutters align-items-center">
+                                        <div class="col-auto">
+                                            <i class="fas fa-headset fa-2x text-danger"></i>
+                                        </div>
+                                        <div class="col ml-3">
+                                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                                Tickets não lidos
+                                            </div>
+                                            <div class="h5 mb-0 font-weight-bold">
+                                                {{ stats.unread_tickets }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-danger bg-opacity-10">
+                                    <a href="{{ url_for('support_dashboard') }}" class="text-danger text-decoration-none">
+                                        <small>Ver tickets <i class="fas fa-arrow-right ms-1"></i></small>
+                                    </a>
+                                </div>
                             </div>
+                        {% endif %}
                         </div>
                     </div>
                     

@@ -156,13 +156,20 @@
                                         {% endif %}
                                     {% endfor %}
                                     
-                                    <tr class="{{ 'table-warning' if unread_count > 0 else '' }} {{ 'table-light' if ticket.status == 'closed' else '' }}" 
+                                    <tr class="{{ 'table-warning animate__animated animate__fadeIn' if unread_count > 0 else '' }} {{ 'table-light' if ticket.status == 'closed' else '' }}" 
                                         data-status="{{ ticket.status }}" 
                                         data-unread="{{ 'yes' if unread_count > 0 else 'no' }}">
-                                        <td>
-                                            {{ ticket.id }}
+                                        <td class="position-relative">
                                             {% if unread_count > 0 %}
-                                                <span class="badge rounded-pill bg-danger ms-1 animate__animated animate__pulse animate__infinite">Novo</span>
+                                                <span class="position-absolute top-0 start-0 translate-middle-y ms-n2">
+                                                    <i class="fas fa-circle text-danger animate__animated animate__pulse animate__infinite" style="font-size: 0.5rem;"></i>
+                                                </span>
+                                            {% endif %}
+                                            <strong>#{{ ticket.id }}</strong>
+                                            {% if unread_count > 0 %}
+                                                <span class="badge rounded-pill bg-danger ms-1 animate__animated animate__pulse animate__infinite">
+                                                    {{ unread_count }} nova(s)
+                                                </span>
                                             {% endif %}
                                         </td>
                                         <td>
