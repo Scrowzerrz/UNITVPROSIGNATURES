@@ -23,19 +23,18 @@ def start_bot():
 # Import the Flask app
 from app import app
 
-# Bot thread variable to keep track of the thread
-bot_thread = None
+# Start bot in a background thread
+if BOT_TOKEN:
+    logger.info("Initializing Telegram bot thread...")
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    logger.info("Telegram bot thread started")
+else:
+    logger.warning("Telegram bot not started. Set TELEGRAM_BOT_TOKEN environment variable to enable it.")
 
 if __name__ == "__main__":
-    # Start bot thread only if token is available
-    if BOT_TOKEN:
-        bot_thread = threading.Thread(target=start_bot)
-        bot_thread.daemon = True
-        bot_thread.start()
-        logger.info("Telegram bot thread started")
-    else:
-        logger.warning("Telegram bot not started. Set TELEGRAM_BOT_TOKEN environment variable to enable it.")
-    
+    # O bot já foi inicializado acima, não precisamos iniciar novamente
     # Start flask app
     port = int(os.environ.get("PORT", 5000))
     from app import app as flask_app
