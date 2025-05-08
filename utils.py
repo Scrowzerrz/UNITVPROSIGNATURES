@@ -858,13 +858,59 @@ def get_pending_approvals():
     return pending_approvals
 
 def get_users_waiting_for_login():
-    payments = read_json_file(PAYMENTS_FILE)
+    """
+    Retorna uma lista de pagamentos aprovados cujos logins ainda não foram entregues.
+    Verifica também o sistema multi-planos para evitar notificações duplicadas.
+    """
+    payments = read_json_file(PAYMENTS_FILE) or {}
+    users = read_json_file(USERS_FILE) or {}
     waiting_users = []
     
     for payment_id, payment in payments.items():
-        if payment['status'] == 'approved' and not payment['login_delivered']:
-            waiting_users.append(payment)
+        # Verificar se o pagamento está aprovado e o login não foi entregue
+        if payment.get('status') == 'approved' and not payment.get('login_delivered', False):
+            user_id = payment.get('user_id')
+            plan_type = payment.get('plan_type')
+            
+            # Verificações adicionais para evitar notificações fantasmas
+            if not user_id or not plan_type:
+                logger.warning(f"Pagamento ID {payment_id} com dados incompletos: user_id={user_id}, plan_type={plan_type}")
+                continue
+                
+            # Verificar se o usuário existe 
+            user = users.get(str(user_id))
+            if not user:
+                logger.warning(f"Usuário ID {user_id} não encontrado para pagamento ID {payment_id}")
+                continue
+                
+            # Verificar se o plano já foi entregue pelo sistema multi-planos
+            already_delivered = False
+            
+            # Verifica o sistema de múltiplos planos
+            if 'plans' in user:
+                for plan in user['plans']:
+                    # Se o plano é do mesmo tipo e está ativo - possível entrega duplicada
+                    if plan.get('plan_type') == plan_type and plan.get('active', False):
+                        # Se o plano foi criado próximo à data do pagamento, provavelmente é o mesmo plano
+                        payment_date = datetime.fromisoformat(payment.get('created_at', '2020-01-01T00:00:00'))
+                        plan_date = datetime.fromisoformat(plan.get('created_at', '2020-01-01T00:00:00'))
+                        
+                        # Margem de 24 horas para possíveis atrasos no processamento
+                        if abs((payment_date - plan_date).total_seconds()) < 86400:  # 24 horas em segundos
+                            already_delivered = True
+                            logger.info(f"Plano já entregue para o pagamento ID {payment_id} (sistema multi-planos)")
+                            
+                            # Atualizar o registro de pagamento para evitar notificações futuras
+                            payment['login_delivered'] = True
+                            
+            # Se não foi entregue pelo sistema multi-planos, adicionar à lista de espera
+            if not already_delivered:
+                waiting_users.append(payment)
     
+    # Salvar alterações nos pagamentos (onde marcamos login_delivered=True para planos já entregues)
+    if payments:
+        write_json_file(PAYMENTS_FILE, payments)
+        
     return waiting_users
 
 # Functions to check and update sales status
