@@ -863,21 +863,36 @@ def send_pix_instructions(message, payment_id):
     # Send message
     if isinstance(message, types.CallbackQuery):
         # If coming from a callback, edit the message
-        bot.edit_message_text(
+        msg = bot.edit_message_text(
             pix_msg,
             message.message.chat.id,
             message.message.message_id,
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+        # Registrar esta mensagem como relacionada ao pagamento
+        chat_id = message.message.chat.id
+        message_id = message.message.message_id
     else:
         # If coming from a text message, send a new message
-        bot.send_message(
+        msg = bot.send_message(
             message.chat.id,
             pix_msg,
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+        chat_id = message.chat.id
+        message_id = msg.message_id
+        
+    # Registrar esta mensagem como relacionada ao pagamento
+    payment = get_payment(payment_id)
+    if payment and 'related_messages' in payment:
+        related_messages = payment['related_messages']
+        message_info = {'chat_id': chat_id, 'message_id': message_id}
+        if message_info not in related_messages:
+            related_messages.append(message_info)
+            update_payment(payment_id, {'related_messages': related_messages})
+            logger.info(f"Registered message {message_id} as related to payment {payment_id}")
 
 # Handler for PIX Manual payment method selection
 @bot.callback_query_handler(func=lambda call: call.data.startswith("pay_pix_manual_"))
@@ -1101,13 +1116,23 @@ def pay_with_pix_mercado_pago(call):
             # para não sobrecarregar a API do Telegram e facilitar o fluxo do usuário
             
             # Editar mensagem com instruções
-            bot.edit_message_text(
+            msg = bot.edit_message_text(
                 mp_msg,
                 call.message.chat.id,
                 call.message.message_id,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
             )
+            
+            # Registrar esta mensagem como relacionada ao pagamento
+            payment = get_payment(payment_id)
+            if payment and 'related_messages' in payment:
+                related_messages = payment['related_messages']
+                message_info = {'chat_id': call.message.chat.id, 'message_id': call.message.message_id}
+                if message_info not in related_messages:
+                    related_messages.append(message_info)
+                    update_payment(payment_id, {'related_messages': related_messages})
+                    logger.info(f"Registered message {call.message.message_id} as related to payment {payment_id}")
             
         else:
             # Erro ao criar pagamento no Mercado Pago
@@ -1307,21 +1332,50 @@ def cancel_payment_callback(call):
         logger.error(f"Error in payment cancellation pre-processing: {e}")
     
     # Cancel the payment in our system regardless of MP API result
-    if cancel_payment(payment_id):
+    success, payment = cancel_payment(payment_id)
+    if success:
         bot.answer_callback_query(call.id, "Pagamento cancelado com sucesso!")
         
-        # Send confirmation message
-        bot.edit_message_text(
+        cancel_message = (
             "❌ *Pagamento Cancelado* ❌\n\n"
             "Seu pagamento foi cancelado com sucesso.\n"
-            "Você pode iniciar uma nova compra quando desejar.",
+            "Você pode iniciar uma nova compra quando desejar."
+        )
+        
+        cancel_keyboard = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton("🔙 Voltar ao Início", callback_data="start")
+        )
+        
+        # Editar a mensagem atual que iniciou o cancelamento
+        bot.edit_message_text(
+            cancel_message,
             call.message.chat.id,
             call.message.message_id,
             parse_mode="Markdown",
-            reply_markup=types.InlineKeyboardMarkup().add(
-                types.InlineKeyboardButton("🔙 Voltar ao Início", callback_data="start")
-            )
+            reply_markup=cancel_keyboard
         )
+        
+        # Editar todas as outras mensagens relacionadas ao pagamento
+        if payment and 'related_messages' in payment:
+            related_messages = payment['related_messages']
+            
+            # Construir lista de mensagens únicas (excluindo a atual)
+            current_msg = {'chat_id': call.message.chat.id, 'message_id': call.message.message_id}
+            
+            for msg_info in related_messages:
+                # Verificar se não é a mensagem atual
+                if msg_info.get('chat_id') != current_msg['chat_id'] or msg_info.get('message_id') != current_msg['message_id']:
+                    try:
+                        bot.edit_message_text(
+                            cancel_message,
+                            msg_info.get('chat_id'),
+                            msg_info.get('message_id'),
+                            parse_mode="Markdown",
+                            reply_markup=cancel_keyboard
+                        )
+                        logger.info(f"Edited message {msg_info.get('message_id')} in chat {msg_info.get('chat_id')} for cancelled payment {payment_id}")
+                    except Exception as edit_err:
+                        logger.error(f"Error editing message {msg_info.get('message_id')} for payment {payment_id}: {edit_err}")
     else:
         bot.answer_callback_query(call.id, "Erro ao cancelar pagamento!")
 

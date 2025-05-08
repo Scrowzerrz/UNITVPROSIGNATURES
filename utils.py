@@ -364,7 +364,8 @@ def create_payment(user_id, plan_type, amount, coupon_code=None):
         'approved_at': None,
         'payer_name': '',
         'login_delivered': False,
-        'expiration_notified': False # Para evitar notificações duplicadas de expiração
+        'expiration_notified': False, # Para evitar notificações duplicadas de expiração
+        'related_messages': [] # Lista de mensagens relacionadas (chat_id, message_id)
     }
     
     payments[payment_id] = payment_data
