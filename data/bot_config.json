@@ -14,8 +14,10 @@
             "applicable_plans": [
                 "1_year"
             ],
-            "uses": 0,
-            "usage_history": {}
+            "uses": 1,
+            "usage_history": {
+                "6067681666": 1
+            }
         }
     },
     "referral_rewards": {
