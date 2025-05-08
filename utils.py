@@ -500,7 +500,9 @@ def cancel_payment(payment_id):
         payment_id (str): ID do pagamento a ser cancelado
         
     Returns:
-        bool: True se o cancelamento foi bem-sucedido, False caso contrário
+        tuple: (bool, dict) Tupla com resultado da operação e dados do pagamento.
+               O primeiro elemento é True se o cancelamento foi bem-sucedido, False caso contrário.
+               O segundo elemento são os dados do pagamento ou None se não encontrado.
     """
     payments = read_json_file(PAYMENTS_FILE)
     if payment_id in payments:
@@ -514,9 +516,9 @@ def cancel_payment(payment_id):
         payment['status'] = 'cancelled'
         payments[payment_id] = payment
         write_json_file(PAYMENTS_FILE, payments)
-        return True
+        return True, payment
     
-    return False
+    return False, None
 
 # Login management functions
 def add_login(plan_type, login_data):
