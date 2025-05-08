@@ -14,7 +14,8 @@ from utils import (
     read_json_file, write_json_file, add_login, add_coupon, delete_coupon,
     resume_sales, suspend_sales, sales_enabled, format_currency, create_auth_token, verify_auth_token,
     is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session,
-    generate_access_code, verify_access_code, list_active_access_codes, is_root_admin
+    generate_access_code, verify_access_code, list_active_access_codes, is_root_admin,
+    get_active_seasonal_discounts, add_seasonal_discount, remove_seasonal_discount
 )
 
 # Configure logging
