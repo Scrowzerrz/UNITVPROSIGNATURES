@@ -233,9 +233,20 @@
                 
                 <!-- Alerts -->
                 {% if stats.unread_tickets > 0 %}
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                    <strong><i class="fas fa-headset me-2"></i> Atenção!</strong> Existem {{ stats.unread_tickets }} ticket(s) de suporte não lido(s).
-                    <a href="{{ url_for('support_dashboard') }}" class="alert-link">Verificar agora</a>.
+                <div class="alert alert-danger alert-dismissible fade show animate__animated animate__fadeIn" role="alert">
+                    <div class="d-flex align-items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-headset fa-2x me-3 animate__animated animate__pulse animate__infinite"></i>
+                        </div>
+                        <div class="flex-grow-1 ms-2">
+                            <h5 class="alert-heading mb-1">Tickets de Suporte Pendentes!</h5>
+                            <p class="mb-1">Existem <strong>{{ stats.unread_tickets }}</strong> ticket(s) de suporte aguardando sua resposta.</p>
+                            <hr class="my-2">
+                            <a href="{{ url_for('support_dashboard') }}" class="btn btn-sm btn-light">
+                                <i class="fas fa-reply me-1"></i> Responder agora
+                            </a>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
                 {% endif %}

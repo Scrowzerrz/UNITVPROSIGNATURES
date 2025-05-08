@@ -413,37 +413,55 @@
                     </div>
                     
                     {% if ticket.status == 'open' %}
-                    <div class="reply-form mt-4 p-3 border rounded" id="replySection">
+                    <div class="reply-form mt-4 p-4 border rounded shadow-sm" id="replySection">
+                        <h5 class="mb-3 border-bottom pb-2 text-primary">
+                            <i class="fas fa-reply me-2"></i>Responder ao Ticket #{{ ticket.id }}
+                        </h5>
                         <form method="POST" action="{{ url_for('reply_to_ticket', ticket_id=ticket.id) }}" id="replyForm">
                             <div class="form-group mb-3">
                                 <label for="reply_text" class="mb-2 d-flex justify-content-between">
-                                    <span><i class="fas fa-reply me-2"></i><strong>Responder ao usuário:</strong></span>
-                                    <span class="text-muted small">A resposta será enviada via Telegram</span>
+                                    <span><strong>Mensagem de resposta:</strong></span>
+                                    <span class="badge bg-info text-white">Via Telegram</span>
                                 </label>
-                                <textarea name="reply_text" id="reply_text" class="form-control" rows="4" 
-                                          placeholder="Digite sua resposta ao usuário..." required></textarea>
-                                <div class="form-text text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>Sua mensagem será enviada imediatamente para o usuário via Telegram.
+                                <textarea 
+                                    name="reply_text" 
+                                    id="reply_text" 
+                                    class="form-control" 
+                                    rows="5" 
+                                    placeholder="Digite sua resposta ao usuário..." 
+                                    required 
+                                    autofocus
+                                ></textarea>
+                                <div class="form-text text-muted mt-2">
+                                    <i class="fas fa-info-circle me-1"></i> O usuário receberá esta mensagem exatamente como escrita. Use mensagens claras e objetivas.
                                 </div>
+                            </div>
+                            
+                            <div class="alert alert-info mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="closeAfterReply" name="close_after_reply">
+                                    <label class="form-check-label fw-bold" for="closeAfterReply">
+                                        <i class="fas fa-check-circle me-1"></i> Fechar ticket automaticamente após enviar resposta
+                                    </label>
+                                </div>
+                                <small class="d-block mt-1 ms-4">
+                                    O usuário será notificado que o ticket foi fechado junto com sua resposta.
+                                </small>
                             </div>
                             
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="btn-group">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-paper-plane me-2"></i>Enviar Resposta
-                                    </button>
-                                    
-                                    <button type="button" class="btn btn-outline-primary" id="insertTemplateBtn">
+                                    <button type="button" class="btn btn-outline-secondary" id="insertTemplateBtn">
                                         <i class="fas fa-clipboard-list me-2"></i>Usar Template
+                                    </button>
+                                    <button type="button" class="btn btn-outline-warning" id="previewResponseBtn">
+                                        <i class="fas fa-eye me-2"></i>Pré-visualizar
                                     </button>
                                 </div>
                                 
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="1" id="closeAfterReply" name="close_after_reply">
-                                    <label class="form-check-label" for="closeAfterReply">
-                                        Fechar ticket após responder
-                                    </label>
-                                </div>
+                                <button type="submit" class="btn btn-primary btn-lg px-4">
+                                    <i class="fas fa-paper-plane me-2"></i>Enviar Resposta
+                                </button>
                             </div>
                         </form>
                     </div>
@@ -600,6 +618,94 @@
         // Atualizar conversa (simulado - em produção, faria uma chamada AJAX)
         $('#refreshConversation').click(function() {
             location.reload();
+        });
+        
+        // Pré-visualização da resposta
+        $('#previewResponseBtn').click(function() {
+            const responseText = $('#reply_text').val();
+            const ticketId = '{{ ticket.id }}';
+            const closeAfterReply = $('#closeAfterReply').is(':checked');
+            
+            if (!responseText.trim()) {
+                alert('Por favor, escreva uma resposta antes de pré-visualizar.');
+                $('#reply_text').focus();
+                return;
+            }
+            
+            // Cria o modal de pré-visualização
+            const previewModalHTML = `
+                <div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title" id="previewModalLabel">
+                                    <i class="fas fa-eye me-2"></i>Pré-visualização da Resposta
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="alert alert-info mb-3">
+                                    <i class="fas fa-info-circle me-2"></i>Esta é uma pré-visualização de como o usuário verá sua mensagem no Telegram.
+                                </div>
+                                
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header bg-primary bg-opacity-10 d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>Ticket #${ticketId}</strong>
+                                            <span class="badge ${ closeAfterReply ? 'bg-danger' : 'bg-success' } ms-2">
+                                                ${ closeAfterReply ? 'Será fechado' : 'Permanecerá aberto' }
+                                            </span>
+                                        </div>
+                                        <div class="text-muted small">
+                                            ${new Date().toLocaleString('pt-BR')}
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <strong class="text-primary">Mensagem que será enviada:</strong>
+                                        </div>
+                                        <div class="border rounded p-3 bg-light">
+                                            <pre class="mb-0" style="white-space: pre-wrap; word-break: break-word;">${responseText}</pre>
+                                        </div>
+                                        
+                                        ${closeAfterReply ? 
+                                            `<div class="mt-3 border-top pt-3">
+                                                <div class="text-danger fw-bold">
+                                                    <i class="fas fa-info-circle me-2"></i>Notificação adicional:
+                                                </div>
+                                                <div>Este ticket será fechado automaticamente após o envio da resposta.</div>
+                                            </div>` 
+                                        : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                                <button type="button" class="btn btn-primary" id="sendFromPreview">
+                                    <i class="fas fa-paper-plane me-2"></i>Enviar Resposta
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Adiciona o modal ao corpo do documento
+            $('body').append(previewModalHTML);
+            
+            // Exibe o modal
+            const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+            previewModal.show();
+            
+            // Botão de envio no modal
+            $('#sendFromPreview').click(function() {
+                $('#replyForm').submit();
+            });
+            
+            // Remove o modal do DOM após fechamento
+            $('#previewModal').on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
         });
     });
 </script>
