@@ -3213,6 +3213,12 @@ def back_to_start(call):
         types.InlineKeyboardButton("🔗 Programa de Indicação", callback_data="referral_program")
     )
     
+    # Add giveaway button for admins
+    if is_admin_telegram_id(str(call.from_user.id)):
+        keyboard.add(
+            types.InlineKeyboardButton("🎰 Gerenciar Sorteios", callback_data="admin_giveaways")
+        )
+    
     # Edit the message instead of sending new
     try:
         bot.edit_message_text(
@@ -3811,9 +3817,16 @@ def run_bot():
     logger.info("Starting Telegram bot...")
     start_background_tasks()
     
+    # Primeiro, tentar limpar quaisquer atualizações pendentes
+    # para evitar conflitos com outras instâncias
+    try:
+        bot.get_updates(offset=-1, timeout=1)
+    except Exception as e:
+        logger.warning(f"Error clearing pending updates: {e}")
+    
     try:
         # O infinity_polling já inclui non_stop=True por padrão
-        bot.infinity_polling(timeout=20)
+        bot.infinity_polling(timeout=20, allowed_updates=None)
     except Exception as e:
         logger.error(f"Bot polling error: {e}")
     finally:
