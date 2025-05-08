@@ -124,21 +124,19 @@ def check_login_availability():
                 user_id = sub['user_id']
                 days_left = sub['days_left']
                 plan_type = sub['plan_type']
+                plan_id = sub.get('plan_id')  # pode ser None para planos antigos
                 
-                # Check if notification was already sent
-                user = get_user(user_id)
-                if user and not user.get('expiration_notified'):
-                    bot.send_message(
-                        user_id,
-                        f"⏰ *Seu plano UniTV está prestes a expirar!* ⏰\n\n"
-                        f"Seu plano {PLANS[plan_type]['name']} expira em {days_left} dias.\n\n"
-                        f"Para renovar sua assinatura, use o comando /start e escolha seu novo plano.",
-                        parse_mode="Markdown"
-                    )
-                    
-                    # Mark as notified
-                    user['expiration_notified'] = True
-                    save_user(user_id, user)
+                # Enviar notificação individualizada para cada plano
+                bot.send_message(
+                    user_id,
+                    f"⏰ *Seu plano UniTV está prestes a expirar!* ⏰\n\n"
+                    f"Seu plano {PLANS[plan_type]['name']} expira em {days_left} dias.\n\n"
+                    f"Para renovar sua assinatura, use o comando /start e escolha seu novo plano.",
+                    parse_mode="Markdown"
+                )
+                
+                # Marcar este plano específico como notificado
+                mark_expiration_notified(user_id, plan_id)
             
             # Check for pending payment approvals
             pending_approvals = get_pending_approvals()
@@ -392,17 +390,32 @@ def start_command(message):
     
     # Add buttons based on user status
     if user.get('has_active_plan'):
-        plan_type = user.get('plan_type')
-        expiration_date = datetime.fromisoformat(user.get('plan_expiration'))
-        days_left = (expiration_date - datetime.now()).days
+        # Obter todos os planos ativos do usuário
+        active_plans = get_user_plans(user_id)
+        
+        # Verificar se algum plano está próximo de expirar (menos de 10 dias)
+        renew_button_needed = False
+        
+        if active_plans:
+            for plan in active_plans:
+                expiration_date = datetime.fromisoformat(plan.get('expiration_date'))
+                days_left = (expiration_date - datetime.now()).days
+                if days_left <= 10:
+                    renew_button_needed = True
+                    break
         
         # Add account info button
         keyboard.add(
             types.InlineKeyboardButton("📊 Minha Conta", callback_data="my_account")
         )
         
-        # Add renew button if less than 10 days left
-        if days_left <= 10:
+        # Sempre mostrar botão para adquirir novo plano/login
+        keyboard.add(
+            types.InlineKeyboardButton("➕ Adquirir Novo Plano", callback_data="show_plans")
+        )
+        
+        # Add renew button if any plan is expiring soon
+        if renew_button_needed:
             keyboard.add(
                 types.InlineKeyboardButton("🔄 Renovar Assinatura", callback_data="show_plans")
             )
