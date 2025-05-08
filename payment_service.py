@@ -359,19 +359,27 @@ def get_users_waiting_for_login():
     Retorna usuários que pagaram mas ainda não receberam login.
     
     Returns:
-        dict: Dicionário com tipos de plano como chaves e listas de pagamentos como valores
+        list: Lista de pagamentos de usuários aguardando login
     """
     from config import PLANS
     
     payments = read_json_file(PAYMENTS_FILE)
-    waiting_users = {plan_id: [] for plan_id in PLANS.keys()}
+    if not isinstance(payments, dict):
+        logger.error(f"Payments file returned non-dict type: {type(payments)}")
+        return []
+        
+    waiting_users = []
     
     for payment_id, payment in payments.items():
-        if (payment['status'] == 'completed' and 
+        if (isinstance(payment, dict) and
+            payment.get('status') == 'completed' and 
             not payment.get('login_delivered', False) and 
-            payment['plan_type'] in PLANS):
+            payment.get('plan_type') in PLANS):
             
-            waiting_users[payment['plan_type']].append(payment)
+            # Adicionar o ID do pagamento ao dicionário para referência
+            payment_with_id = payment.copy()
+            payment_with_id['payment_id'] = payment_id
+            waiting_users.append(payment_with_id)
     
     return waiting_users
 
@@ -400,8 +408,6 @@ def calculate_plan_price(user_id, plan_type):
     Returns:
         float: Preço do plano com descontos aplicáveis
     """
-    from coupon_service import get_active_seasonal_discounts
-    
     # Obter preço base do plano
     if plan_type not in PLANS:
         logger.error(f"Tipo de plano inválido: {plan_type}")
@@ -410,16 +416,29 @@ def calculate_plan_price(user_id, plan_type):
     base_price = PLANS[plan_type]['price']
     
     # Verificar se há descontos sazonais aplicáveis
-    seasonal_discounts = get_active_seasonal_discounts()
+    bot_config = read_json_file(BOT_CONFIG_FILE)
+    seasonal_discounts = bot_config.get('seasonal_discounts', {})
+    current_time = datetime.now()
     applicable_discount = 0
     
     for discount_id, discount in seasonal_discounts.items():
+        # Verificar se o desconto ainda está válido
+        if 'expires_at' in discount:
+            try:
+                expiration_date = datetime.fromisoformat(discount['expires_at'])
+                if current_time > expiration_date:
+                    # Desconto expirado, pular
+                    continue
+            except (ValueError, TypeError) as e:
+                logger.error(f"Erro ao processar data de expiração do desconto {discount_id}: {e}")
+                continue
+
         # Verificar se o desconto se aplica a este plano
         applicable_plans = discount.get('applicable_plans')
         
         if (applicable_plans is None or plan_type in applicable_plans):
             # Aplicar o maior desconto encontrado
-            discount_percent = discount['discount_percent']
+            discount_percent = discount.get('discount_percent', 0)
             if discount_percent > applicable_discount:
                 applicable_discount = discount_percent
     

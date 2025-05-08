@@ -10,10 +10,21 @@ from config import (
     USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, SESSION_FILE,
     PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
 )
-from utils import (
-    read_json_file, write_json_file, add_login, add_coupon, delete_coupon,
-    resume_sales, suspend_sales, sales_enabled, format_currency, create_auth_token, verify_auth_token,
-    is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session,
+
+# Imports de módulos refatorados
+from db_utils import read_json_file, write_json_file
+
+from login_service import add_login
+
+from coupon_service import add_coupon, delete_coupon
+
+from payment_service import (
+    resume_sales, suspend_sales, sales_enabled, format_currency
+)
+
+from user_service import (
+    is_admin_telegram_id, is_allowed_telegram_id, create_session, 
+    get_session, delete_session, create_auth_token, verify_auth_token,
     generate_access_code, verify_access_code, list_active_access_codes
 )
 
