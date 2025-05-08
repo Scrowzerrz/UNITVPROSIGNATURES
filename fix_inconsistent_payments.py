@@ -100,6 +100,13 @@ def fix_inconsistent_payments():
                     payment['login_delivered'] = True
                     payment['plan_id'] = plan_id
                     fixed_count += 1
+            else:
+                # Nenhum plano existe e é um pagamento aprovado sem login entregue
+                # Solução: marcar o pagamento como entregue (plano fantasma)
+                logger.info(f"Marcando pagamento ID {payment_id} como entregue (plano fantasma)")
+                payment['login_delivered'] = True
+                payment['is_ghost_payment'] = True
+                fixed_count += 1
             
     # 5. Salvar as alterações
     logger.info(f"Corrigido(s) {fixed_count} pagamento(s) inconsistente(s)")

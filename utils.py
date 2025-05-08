@@ -861,10 +861,20 @@ def get_users_waiting_for_login():
     """
     Retorna uma lista de pagamentos aprovados cujos logins ainda não foram entregues.
     Verifica também o sistema multi-planos para evitar notificações duplicadas.
+    
+    Melhorias:
+    1. Detecta pagamentos "fantasmas" - aprovados mas que nunca tiveram logins entregues
+    2. Verifica se o pagamento foi feito antes da implementação do sistema multi-planos
+    3. Detecta pagamentos de teste ou obsoletos com mais de 60 dias
     """
     payments = read_json_file(PAYMENTS_FILE) or {}
     users = read_json_file(USERS_FILE) or {}
+    logins = read_json_file(LOGINS_FILE) or {}
     waiting_users = []
+    fixed_payments = False
+    
+    # Data de corte para pagamentos muito antigos (60 dias)
+    cutoff_date = datetime.now() - timedelta(days=60)
     
     for payment_id, payment in payments.items():
         # Verificar se o pagamento está aprovado e o login não foi entregue
@@ -875,14 +885,35 @@ def get_users_waiting_for_login():
             # Verificações adicionais para evitar notificações fantasmas
             if not user_id or not plan_type:
                 logger.warning(f"Pagamento ID {payment_id} com dados incompletos: user_id={user_id}, plan_type={plan_type}")
+                # Marcar como entregue para evitar notificações futuras
+                payment['login_delivered'] = True
+                payment['is_ghost_payment'] = True
+                fixed_payments = True
                 continue
                 
             # Verificar se o usuário existe 
             user = users.get(str(user_id))
             if not user:
                 logger.warning(f"Usuário ID {user_id} não encontrado para pagamento ID {payment_id}")
+                # Marcar como entregue para evitar notificações futuras
+                payment['login_delivered'] = True
+                payment['is_ghost_payment'] = True
+                fixed_payments = True
                 continue
-                
+            
+            # Verificar se o pagamento é muito antigo (mais de 60 dias)
+            if payment.get('created_at'):
+                try:
+                    payment_date = datetime.fromisoformat(payment.get('created_at'))
+                    if payment_date < cutoff_date:
+                        logger.info(f"Pagamento ID {payment_id} é muito antigo ({payment_date.isoformat()}). Marcando como entregue.")
+                        payment['login_delivered'] = True
+                        payment['is_ghost_payment'] = True
+                        fixed_payments = True
+                        continue
+                except (ValueError, TypeError):
+                    pass
+            
             # Verificar se o plano já foi entregue pelo sistema multi-planos
             already_delivered = False
             
@@ -902,13 +933,56 @@ def get_users_waiting_for_login():
                             
                             # Atualizar o registro de pagamento para evitar notificações futuras
                             payment['login_delivered'] = True
+                            payment['plan_id'] = plan.get('id')
+                            fixed_payments = True
+                            break
+            
+            # Verificar sistema antigo (atributos diretos no objeto user)
+            elif not already_delivered and user.get('has_active_plan') and user.get('plan_type') == plan_type:
+                # O usuário já tem um plano do mesmo tipo no sistema antigo
+                payment_date = datetime.fromisoformat(payment.get('created_at', '2020-01-01T00:00:00'))
+                
+                # Se tiver data de expiração, usar para verificar se o plano foi ativado após o pagamento
+                if user.get('plan_expiration'):
+                    try:
+                        expiration_date = datetime.fromisoformat(user.get('plan_expiration'))
+                        plan_duration = PLANS.get(plan_type, {}).get('duration_days', 30)
+                        approx_start_date = expiration_date - timedelta(days=plan_duration)
+                        
+                        # Se a data aproximada de início é próxima à data do pagamento, provavelmente é o mesmo plano
+                        if abs((payment_date - approx_start_date).total_seconds()) < 172800:  # 48 horas em segundos
+                            already_delivered = True
+                            logger.info(f"Plano já entregue para o pagamento ID {payment_id} (sistema antigo)")
                             
-            # Se não foi entregue pelo sistema multi-planos, adicionar à lista de espera
+                            # Atualizar o registro de pagamento
+                            payment['login_delivered'] = True
+                            fixed_payments = True
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Verificar disponibilidade de logins
+            # Se não há logins disponíveis para o plano, não faz sentido notificar repetidamente
+            if not already_delivered and (plan_type not in logins or not logins.get(plan_type)):
+                # Verificar se já notificamos sobre este pagamento nas últimas 24 horas
+                if payment.get('last_no_login_notification'):
+                    try:
+                        last_notification = datetime.fromisoformat(payment.get('last_no_login_notification'))
+                        if (datetime.now() - last_notification).total_seconds() < 86400:  # 24 horas
+                            # Não notificar novamente tão cedo
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Registrar esta notificação
+                payment['last_no_login_notification'] = datetime.now().isoformat()
+                fixed_payments = True
+            
+            # Se não foi entregue pelo sistema multi-planos e não foi entregue pelo sistema antigo, adicionar à lista de espera
             if not already_delivered:
                 waiting_users.append(payment)
     
     # Salvar alterações nos pagamentos (onde marcamos login_delivered=True para planos já entregues)
-    if payments:
+    if fixed_payments:
         write_json_file(PAYMENTS_FILE, payments)
         
     return waiting_users

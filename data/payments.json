@@ -1,243 +1,247 @@
 {
-    "c1badeb5-042c-4e9e-b5e3-d4b9fc36e913": {
-        "payment_id": "c1badeb5-042c-4e9e-b5e3-d4b9fc36e913",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "rejected",
-        "created_at": "2025-05-06T17:52:40.543336",
-        "approved_at": null,
-        "payer_name": "Rafael Rosa",
-        "login_delivered": false
-    },
-    "0db931ec-29f8-45ba-bf36-42cedaacd88e": {
-        "payment_id": "0db931ec-29f8-45ba-bf36-42cedaacd88e",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-06T17:54:31.503493",
-        "approved_at": null,
-        "payer_name": "Lovabke",
-        "login_delivered": false
-    },
-    "1184288a-4f74-4e41-8959-93ab1a9291f7": {
-        "payment_id": "1184288a-4f74-4e41-8959-93ab1a9291f7",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-06T18:13:51.232676",
-        "approved_at": null,
-        "payer_name": "Lovable",
-        "login_delivered": false
-    },
-    "e3873908-4547-4dc4-8dd9-04b77c987949": {
-        "payment_id": "e3873908-4547-4dc4-8dd9-04b77c987949",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-06T18:15:40.180783",
-        "approved_at": null,
-        "payer_name": "Ikk",
-        "login_delivered": false,
-        "mp_payment_id": 110611969380
-    },
-    "1d112788-5be8-41dd-bc74-d60e6bb87fbf": {
-        "payment_id": "1d112788-5be8-41dd-bc74-d60e6bb87fbf",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-06T18:23:30.477781",
-        "approved_at": null,
-        "payer_name": "Lwlala",
-        "login_delivered": false,
-        "mp_payment_id": 110612228018
-    },
-    "87e7a223-67ea-4106-bd34-00d047f74ab1": {
-        "payment_id": "87e7a223-67ea-4106-bd34-00d047f74ab1",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-08T02:14:04.049853",
-        "approved_at": null,
-        "payer_name": "Lala",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "mp_payment_id": 110790636538
-    },
-    "8beff53b-5193-40cc-bec8-5cff05488707": {
-        "payment_id": "8beff53b-5193-40cc-bec8-5cff05488707",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 1.0,
-        "original_amount": 1.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-08T02:38:50.010284",
-        "approved_at": null,
-        "payer_name": "Rafa",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 420
-            }
-        ],
-        "mp_payment_id": 110790507734
-    },
-    "9274327e-7b28-4f49-a508-790d7faf5ddf": {
-        "payment_id": "9274327e-7b28-4f49-a508-790d7faf5ddf",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-08T03:17:29.495832",
-        "approved_at": null,
-        "payer_name": "Llo",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 446
-            }
-        ],
-        "mp_payment_id": 110343076059
-    },
-    "5678f3fc-2bbf-4418-b5c6-85546944e677": {
-        "payment_id": "5678f3fc-2bbf-4418-b5c6-85546944e677",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-08T03:17:46.117749",
-        "approved_at": null,
-        "payer_name": "Mno",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 450
-            }
-        ],
-        "mp_payment_id": 110343419667
-    },
-    "3c4ee6e0-0c3b-4ded-90ad-bc38f033a01e": {
-        "payment_id": "3c4ee6e0-0c3b-4ded-90ad-bc38f033a01e",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 9.0,
-        "original_amount": 9.0,
-        "coupon_code": "0",
-        "status": "completed",
-        "created_at": "2025-05-08T12:52:50.342061",
-        "approved_at": "2025-05-08T12:52:58.808422",
-        "payer_name": "Llll",
-        "login_delivered": true,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 460
-            }
-        ]
-    },
-    "a17338ae-fe01-49cb-9b32-6c576fead882": {
-        "payment_id": "a17338ae-fe01-49cb-9b32-6c576fead882",
-        "user_id": "6067681666",
-        "plan_type": "1_year",
-        "amount": 38.0,
-        "original_amount": 38.0,
-        "coupon_code": "5",
-        "status": "approved",
-        "created_at": "2025-05-08T13:00:49.329479",
-        "approved_at": "2025-05-08T13:01:06.687724",
-        "payer_name": "Lolj",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 477
-            }
-        ]
-    },
-    "19845746-1f13-43ff-bd2c-b5190a0e783a": {
-        "payment_id": "19845746-1f13-43ff-bd2c-b5190a0e783a",
-        "user_id": "6067681666",
-        "plan_type": "1_year",
-        "amount": 55.0,
-        "original_amount": 55.0,
-        "coupon_code": "0",
-        "status": "approved",
-        "created_at": "2025-05-08T13:13:04.010279",
-        "approved_at": "2025-05-08T13:13:18.254793",
-        "payer_name": "Hajak",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 498
-            }
-        ]
-    },
-    "b972dfd7-1614-4842-a49c-cc667509031f": {
-        "payment_id": "b972dfd7-1614-4842-a49c-cc667509031f",
-        "user_id": "6067681666",
-        "plan_type": "1_year",
-        "amount": 55.0,
-        "original_amount": 55.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-08T13:18:38.728084",
-        "approved_at": null,
-        "payer_name": "Lala",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": []
-    },
-    "75dbd7a2-fc84-4d0e-a031-c71445140f60": {
-        "payment_id": "75dbd7a2-fc84-4d0e-a031-c71445140f60",
-        "user_id": "6067681666",
-        "plan_type": "30_days",
-        "amount": 20.0,
-        "original_amount": 20.0,
-        "coupon_code": "0",
-        "status": "cancelled",
-        "created_at": "2025-05-08T13:19:33.485838",
-        "approved_at": null,
-        "payer_name": "Yq7q",
-        "login_delivered": false,
-        "expiration_notified": false,
-        "related_messages": [
-            {
-                "chat_id": 6067681666,
-                "message_id": 525
-            }
-        ],
-        "mp_payment_id": 110880258618
-    }
+  "c1badeb5-042c-4e9e-b5e3-d4b9fc36e913": {
+    "payment_id": "c1badeb5-042c-4e9e-b5e3-d4b9fc36e913",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "rejected",
+    "created_at": "2025-05-06T17:52:40.543336",
+    "approved_at": null,
+    "payer_name": "Rafael Rosa",
+    "login_delivered": false
+  },
+  "0db931ec-29f8-45ba-bf36-42cedaacd88e": {
+    "payment_id": "0db931ec-29f8-45ba-bf36-42cedaacd88e",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-06T17:54:31.503493",
+    "approved_at": null,
+    "payer_name": "Lovabke",
+    "login_delivered": false
+  },
+  "1184288a-4f74-4e41-8959-93ab1a9291f7": {
+    "payment_id": "1184288a-4f74-4e41-8959-93ab1a9291f7",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-06T18:13:51.232676",
+    "approved_at": null,
+    "payer_name": "Lovable",
+    "login_delivered": false
+  },
+  "e3873908-4547-4dc4-8dd9-04b77c987949": {
+    "payment_id": "e3873908-4547-4dc4-8dd9-04b77c987949",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-06T18:15:40.180783",
+    "approved_at": null,
+    "payer_name": "Ikk",
+    "login_delivered": false,
+    "mp_payment_id": 110611969380
+  },
+  "1d112788-5be8-41dd-bc74-d60e6bb87fbf": {
+    "payment_id": "1d112788-5be8-41dd-bc74-d60e6bb87fbf",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-06T18:23:30.477781",
+    "approved_at": null,
+    "payer_name": "Lwlala",
+    "login_delivered": false,
+    "mp_payment_id": 110612228018
+  },
+  "87e7a223-67ea-4106-bd34-00d047f74ab1": {
+    "payment_id": "87e7a223-67ea-4106-bd34-00d047f74ab1",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-08T02:14:04.049853",
+    "approved_at": null,
+    "payer_name": "Lala",
+    "login_delivered": false,
+    "expiration_notified": false,
+    "mp_payment_id": 110790636538
+  },
+  "8beff53b-5193-40cc-bec8-5cff05488707": {
+    "payment_id": "8beff53b-5193-40cc-bec8-5cff05488707",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 1.0,
+    "original_amount": 1.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-08T02:38:50.010284",
+    "approved_at": null,
+    "payer_name": "Rafa",
+    "login_delivered": false,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 420
+      }
+    ],
+    "mp_payment_id": 110790507734
+  },
+  "9274327e-7b28-4f49-a508-790d7faf5ddf": {
+    "payment_id": "9274327e-7b28-4f49-a508-790d7faf5ddf",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-08T03:17:29.495832",
+    "approved_at": null,
+    "payer_name": "Llo",
+    "login_delivered": false,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 446
+      }
+    ],
+    "mp_payment_id": 110343076059
+  },
+  "5678f3fc-2bbf-4418-b5c6-85546944e677": {
+    "payment_id": "5678f3fc-2bbf-4418-b5c6-85546944e677",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-08T03:17:46.117749",
+    "approved_at": null,
+    "payer_name": "Mno",
+    "login_delivered": false,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 450
+      }
+    ],
+    "mp_payment_id": 110343419667
+  },
+  "3c4ee6e0-0c3b-4ded-90ad-bc38f033a01e": {
+    "payment_id": "3c4ee6e0-0c3b-4ded-90ad-bc38f033a01e",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 9.0,
+    "original_amount": 9.0,
+    "coupon_code": "0",
+    "status": "completed",
+    "created_at": "2025-05-08T12:52:50.342061",
+    "approved_at": "2025-05-08T12:52:58.808422",
+    "payer_name": "Llll",
+    "login_delivered": true,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 460
+      }
+    ]
+  },
+  "a17338ae-fe01-49cb-9b32-6c576fead882": {
+    "payment_id": "a17338ae-fe01-49cb-9b32-6c576fead882",
+    "user_id": "6067681666",
+    "plan_type": "1_year",
+    "amount": 38.0,
+    "original_amount": 38.0,
+    "coupon_code": "5",
+    "status": "approved",
+    "created_at": "2025-05-08T13:00:49.329479",
+    "approved_at": "2025-05-08T13:01:06.687724",
+    "payer_name": "Lolj",
+    "login_delivered": true,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 477
+      }
+    ],
+    "last_no_login_notification": "2025-05-08T18:13:05.673874",
+    "is_ghost_payment": true
+  },
+  "19845746-1f13-43ff-bd2c-b5190a0e783a": {
+    "payment_id": "19845746-1f13-43ff-bd2c-b5190a0e783a",
+    "user_id": "6067681666",
+    "plan_type": "1_year",
+    "amount": 55.0,
+    "original_amount": 55.0,
+    "coupon_code": "0",
+    "status": "approved",
+    "created_at": "2025-05-08T13:13:04.010279",
+    "approved_at": "2025-05-08T13:13:18.254793",
+    "payer_name": "Hajak",
+    "login_delivered": true,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 498
+      }
+    ],
+    "last_no_login_notification": "2025-05-08T18:13:05.673884",
+    "is_ghost_payment": true
+  },
+  "b972dfd7-1614-4842-a49c-cc667509031f": {
+    "payment_id": "b972dfd7-1614-4842-a49c-cc667509031f",
+    "user_id": "6067681666",
+    "plan_type": "1_year",
+    "amount": 55.0,
+    "original_amount": 55.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-08T13:18:38.728084",
+    "approved_at": null,
+    "payer_name": "Lala",
+    "login_delivered": false,
+    "expiration_notified": false,
+    "related_messages": []
+  },
+  "75dbd7a2-fc84-4d0e-a031-c71445140f60": {
+    "payment_id": "75dbd7a2-fc84-4d0e-a031-c71445140f60",
+    "user_id": "6067681666",
+    "plan_type": "30_days",
+    "amount": 20.0,
+    "original_amount": 20.0,
+    "coupon_code": "0",
+    "status": "cancelled",
+    "created_at": "2025-05-08T13:19:33.485838",
+    "approved_at": null,
+    "payer_name": "Yq7q",
+    "login_delivered": false,
+    "expiration_notified": false,
+    "related_messages": [
+      {
+        "chat_id": 6067681666,
+        "message_id": 525
+      }
+    ],
+    "mp_payment_id": 110880258618
+  }
 }
