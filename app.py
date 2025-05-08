@@ -16,7 +16,8 @@ from utils import (
     is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session,
     generate_access_code, verify_access_code, list_active_access_codes, is_root_admin,
     get_active_seasonal_discounts, add_seasonal_discount, remove_seasonal_discount,
-    create_giveaway, get_giveaway, get_giveaways_for_admin, draw_giveaway_winners, cancel_giveaway
+    create_giveaway, get_giveaway, get_giveaways_for_admin, draw_giveaway_winners, cancel_giveaway,
+    remove_plan_from_user
 )
 
 # Configure logging
