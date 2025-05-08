@@ -52,6 +52,11 @@
                                 <i class="fas fa-tags me-2"></i> Cupons
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('giveaways') }}">
+                                <i class="fas fa-gift me-2"></i> Sorteios
+                            </a>
+                        </li>
                         
                         {% if session.get('telegram_id')|string == config.ADMIN_ID|string %}
                         <li class="nav-item">

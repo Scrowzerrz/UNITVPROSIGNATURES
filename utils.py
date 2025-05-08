@@ -1523,3 +1523,543 @@ def list_active_access_codes():
         }
     
     return active_codes
+
+# Giveaway management functions
+def create_giveaway(admin_id, plan_type, winners_count, duration_hours, max_participants=None, description=None):
+    """
+    Cria um sorteio para um plano específico
+    
+    Args:
+        admin_id (str): ID do administrador que criou o sorteio
+        plan_type (str): Tipo de plano a ser sorteado ('30_days', '6_months', '1_year')
+        winners_count (int): Número de ganhadores
+        duration_hours (int): Duração do sorteio em horas
+        max_participants (int, optional): Número máximo de participantes (None para ilimitado)
+        description (str, optional): Descrição do sorteio
+    
+    Returns:
+        str: ID do sorteio criado ou None em caso de erro
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Gerar ID incremental para o sorteio
+        giveaway_id = str(giveaways.get('current_id', 0) + 1)
+        giveaways['current_id'] = int(giveaway_id)
+        
+        # Calcular data de término
+        end_time = datetime.now() + timedelta(hours=duration_hours)
+        
+        # Criar o sorteio
+        giveaway = {
+            'id': giveaway_id,
+            'admin_id': str(admin_id),
+            'plan_type': plan_type,
+            'plan_name': PLANS[plan_type]['name'],
+            'winners_count': winners_count,
+            'duration_hours': duration_hours,
+            'created_at': datetime.now().isoformat(),
+            'ends_at': end_time.isoformat(),
+            'max_participants': max_participants,
+            'description': description,
+            'participants': {},
+            'message_id': None,  # Será definido quando o sorteio for anunciado
+            'winners': [],
+            'status': 'active',  # active, completed, cancelled
+            'confirmation_requests': {},  # Solicitações de confirmação para os ganhadores
+        }
+        
+        # Adicionar sorteio à lista de ativos
+        giveaways['active'][giveaway_id] = giveaway
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return giveaway_id
+    except Exception as e:
+        logger.error(f"Error creating giveaway: {e}")
+        return None
+
+def add_participant_to_giveaway(giveaway_id, user_id, username, first_name):
+    """
+    Adiciona um participante a um sorteio
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+        user_id (str): ID do usuário no Telegram
+        username (str): Nome de usuário do Telegram
+        first_name (str): Primeiro nome do usuário
+    
+    Returns:
+        tuple: (success, current_participants, max_participants)
+            success (bool): True se o usuário foi adicionado com sucesso
+            current_participants (int): Número atual de participantes
+            max_participants (int or None): Número máximo de participantes ou None se ilimitado
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar se o sorteio existe e está ativo
+        if giveaway_id not in giveaways['active']:
+            return False, 0, 0
+        
+        giveaway = giveaways['active'][giveaway_id]
+        
+        # Verificar se o sorteio ainda está ativo
+        if giveaway['status'] != 'active':
+            return False, len(giveaway['participants']), giveaway['max_participants']
+        
+        # Verificar se atingiu o número máximo de participantes
+        if giveaway['max_participants'] is not None and len(giveaway['participants']) >= giveaway['max_participants']:
+            return False, len(giveaway['participants']), giveaway['max_participants']
+        
+        # Verificar se o usuário já está participando
+        if str(user_id) in giveaway['participants']:
+            return True, len(giveaway['participants']), giveaway['max_participants']
+        
+        # Adicionar o usuário como participante
+        giveaway['participants'][str(user_id)] = {
+            'username': username,
+            'first_name': first_name,
+            'joined_at': datetime.now().isoformat()
+        }
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return True, len(giveaway['participants']), giveaway['max_participants']
+    except Exception as e:
+        logger.error(f"Error adding participant to giveaway: {e}")
+        return False, 0, 0
+
+def get_active_giveaways():
+    """
+    Retorna todos os sorteios ativos
+    
+    Returns:
+        dict: Dicionário com os sorteios ativos
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        current_time = datetime.now()
+        
+        # Filtrar sorteios expirados que ainda estão marcados como ativos
+        expired_giveaways = []
+        for giveaway_id, giveaway in giveaways['active'].items():
+            if giveaway['status'] == 'active':
+                end_time = datetime.fromisoformat(giveaway['ends_at'])
+                if current_time > end_time:
+                    # O sorteio expirou, marcá-lo para atualização
+                    expired_giveaways.append(giveaway_id)
+        
+        # Atualizar status dos sorteios expirados
+        for giveaway_id in expired_giveaways:
+            giveaways['active'][giveaway_id]['status'] = 'pending_draw'
+        
+        # Salvar alterações se houver sorteios expirados
+        if expired_giveaways:
+            write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        # Retornar apenas os sorteios que ainda estão ativos
+        return {gid: gv for gid, gv in giveaways['active'].items() if gv['status'] == 'active'}
+    except Exception as e:
+        logger.error(f"Error getting active giveaways: {e}")
+        return {}
+
+def get_giveaway(giveaway_id):
+    """
+    Retorna um sorteio específico
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+    
+    Returns:
+        dict: Dados do sorteio ou None se não encontrado
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar primeiro nos sorteios ativos
+        if giveaway_id in giveaways['active']:
+            return giveaways['active'][giveaway_id]
+        
+        # Verificar nos sorteios concluídos
+        if giveaway_id in giveaways['completed']:
+            return giveaways['completed'][giveaway_id]
+        
+        return None
+    except Exception as e:
+        logger.error(f"Error getting giveaway: {e}")
+        return None
+
+def draw_giveaway_winners(giveaway_id):
+    """
+    Realiza o sorteio de ganhadores para um sorteio
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+    
+    Returns:
+        list: Lista de IDs dos usuários ganhadores ou None em caso de erro
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar se o sorteio existe e está ativo ou pendente de sorteio
+        if giveaway_id not in giveaways['active']:
+            return None
+        
+        giveaway = giveaways['active'][giveaway_id]
+        
+        # Verificar se o sorteio está pronto para sorteio
+        if giveaway['status'] != 'pending_draw' and giveaway['status'] != 'active':
+            return None
+        
+        # Verificar se há participantes suficientes
+        if len(giveaway['participants']) == 0:
+            return []
+        
+        # Determinar quantos ganhadores serão sorteados (não pode ser mais que o número de participantes)
+        num_winners = min(giveaway['winners_count'], len(giveaway['participants']))
+        
+        # Realizar o sorteio
+        import random
+        participant_ids = list(giveaway['participants'].keys())
+        random.shuffle(participant_ids)
+        winners = participant_ids[:num_winners]
+        
+        # Atualizar o status do sorteio
+        giveaway['status'] = 'winners_selected'
+        giveaway['winners'] = winners
+        giveaway['drawn_at'] = datetime.now().isoformat()
+        
+        # Inicializar solicitações de confirmação para todos os ganhadores
+        for winner_id in winners:
+            giveaway['confirmation_requests'][winner_id] = {
+                'sent_at': datetime.now().isoformat(),
+                'expires_at': (datetime.now() + timedelta(minutes=10)).isoformat(),
+                'status': 'pending'  # pending, confirmed, expired
+            }
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return winners
+    except Exception as e:
+        logger.error(f"Error drawing giveaway winners: {e}")
+        return None
+
+def confirm_giveaway_win(giveaway_id, user_id):
+    """
+    Confirma que um usuário ganhou o sorteio
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+        user_id (str): ID do usuário no Telegram
+    
+    Returns:
+        bool: True se a confirmação foi bem-sucedida, False caso contrário
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar se o sorteio existe
+        if giveaway_id not in giveaways['active']:
+            return False
+        
+        giveaway = giveaways['active'][giveaway_id]
+        
+        # Verificar se o usuário é um ganhador
+        if str(user_id) not in giveaway['winners']:
+            return False
+        
+        # Verificar se há uma solicitação de confirmação pendente
+        if str(user_id) not in giveaway['confirmation_requests']:
+            return False
+        
+        confirmation = giveaway['confirmation_requests'][str(user_id)]
+        
+        # Verificar se a confirmação já expirou
+        now = datetime.now()
+        expiration = datetime.fromisoformat(confirmation['expires_at'])
+        if now > expiration:
+            confirmation['status'] = 'expired'
+            write_json_file(GIVEAWAYS_FILE, giveaways)
+            return False
+        
+        # Confirmar a vitória
+        confirmation['status'] = 'confirmed'
+        confirmation['confirmed_at'] = now.isoformat()
+        
+        # Verificar se todos os ganhadores confirmaram
+        all_confirmed = True
+        for conf in giveaway['confirmation_requests'].values():
+            if conf['status'] != 'confirmed':
+                all_confirmed = False
+                break
+        
+        # Se todos confirmaram, concluir o sorteio
+        if all_confirmed:
+            giveaway['status'] = 'completed'
+            giveaway['completed_at'] = now.isoformat()
+            
+            # Mover para a lista de sorteios concluídos
+            giveaways['completed'][giveaway_id] = giveaway
+            del giveaways['active'][giveaway_id]
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error confirming giveaway win: {e}")
+        return False
+
+def check_expired_confirmations():
+    """
+    Verifica confirmações expiradas e realiza novos sorteios quando necessário
+    
+    Returns:
+        dict: Dicionário com informações sobre sorteios que precisam de novo sorteio
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        current_time = datetime.now()
+        redraws_needed = {}
+        
+        # Verificar todos os sorteios ativos
+        for giveaway_id, giveaway in list(giveaways['active'].items()):
+            # Apenas sorteios com ganhadores selecionados
+            if giveaway['status'] != 'winners_selected':
+                continue
+            
+            expired_winners = []
+            
+            # Verificar confirmações expiradas
+            for winner_id, confirmation in list(giveaway['confirmation_requests'].items()):
+                if confirmation['status'] == 'pending':
+                    expiration = datetime.fromisoformat(confirmation['expires_at'])
+                    if current_time > expiration:
+                        confirmation['status'] = 'expired'
+                        expired_winners.append(winner_id)
+            
+            # Se houver confirmações expiradas, preparar para novo sorteio
+            if expired_winners:
+                # Remover ganhadores que não confirmaram
+                for winner_id in expired_winners:
+                    giveaway['winners'].remove(winner_id)
+                    del giveaway['confirmation_requests'][winner_id]
+                
+                # Adicionar informações para novo sorteio
+                redraws_needed[giveaway_id] = {
+                    'giveaway': giveaway,
+                    'expired_winners': expired_winners
+                }
+                
+                # Atualizar status para novo sorteio
+                giveaway['status'] = 'pending_redraw'
+            
+            # Verificar se todos confirmaram
+            all_confirmed = all(conf['status'] == 'confirmed' for conf in giveaway['confirmation_requests'].values())
+            
+            # Se todos confirmaram, concluir o sorteio
+            if all_confirmed and len(giveaway['confirmation_requests']) > 0:
+                giveaway['status'] = 'completed'
+                giveaway['completed_at'] = current_time.isoformat()
+                
+                # Mover para a lista de sorteios concluídos
+                giveaways['completed'][giveaway_id] = giveaway
+                del giveaways['active'][giveaway_id]
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return redraws_needed
+    except Exception as e:
+        logger.error(f"Error checking expired confirmations: {e}")
+        return {}
+
+def redraw_giveaway(giveaway_id, num_winners):
+    """
+    Realiza um novo sorteio para substituir ganhadores que não confirmaram
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+        num_winners (int): Número de ganhadores a serem sorteados
+    
+    Returns:
+        list: Lista de IDs dos novos ganhadores ou None em caso de erro
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar se o sorteio existe e está pendente de novo sorteio
+        if giveaway_id not in giveaways['active']:
+            return None
+        
+        giveaway = giveaways['active'][giveaway_id]
+        
+        if giveaway['status'] != 'pending_redraw':
+            return None
+        
+        # Obter participantes que não são ganhadores atuais
+        current_winners = set(giveaway['winners'])
+        eligible_participants = [uid for uid in giveaway['participants'].keys() if uid not in current_winners]
+        
+        # Verificar se há participantes elegíveis suficientes
+        if not eligible_participants:
+            # Não há mais participantes para sortear
+            giveaway['status'] = 'completed'
+            giveaway['completed_at'] = datetime.now().isoformat()
+            
+            # Mover para a lista de sorteios concluídos
+            giveaways['completed'][giveaway_id] = giveaway
+            del giveaways['active'][giveaway_id]
+            
+            write_json_file(GIVEAWAYS_FILE, giveaways)
+            return []
+        
+        # Determinar quantos ganhadores serão sorteados (não pode ser mais que o número de participantes elegíveis)
+        num_to_draw = min(num_winners, len(eligible_participants))
+        
+        # Realizar o sorteio
+        import random
+        random.shuffle(eligible_participants)
+        new_winners = eligible_participants[:num_to_draw]
+        
+        # Adicionar novos ganhadores
+        giveaway['winners'].extend(new_winners)
+        
+        # Inicializar solicitações de confirmação para os novos ganhadores
+        for winner_id in new_winners:
+            giveaway['confirmation_requests'][winner_id] = {
+                'sent_at': datetime.now().isoformat(),
+                'expires_at': (datetime.now() + timedelta(minutes=10)).isoformat(),
+                'status': 'pending'  # pending, confirmed, expired
+            }
+        
+        # Atualizar status
+        giveaway['status'] = 'winners_selected'
+        giveaway['redrawn_at'] = datetime.now().isoformat()
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return new_winners
+    except Exception as e:
+        logger.error(f"Error redrawing giveaway: {e}")
+        return None
+
+def cancel_giveaway(giveaway_id, admin_id):
+    """
+    Cancela um sorteio
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+        admin_id (str): ID do administrador que está cancelando o sorteio
+    
+    Returns:
+        bool: True se o sorteio foi cancelado com sucesso, False caso contrário
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar se o sorteio existe e está ativo
+        if giveaway_id not in giveaways['active']:
+            return False
+        
+        giveaway = giveaways['active'][giveaway_id]
+        
+        # Verificar se o usuário é administrador (pode ser melhorado para verificar permissões específicas)
+        if not is_admin_telegram_id(admin_id):
+            return False
+        
+        # Cancelar o sorteio
+        giveaway['status'] = 'cancelled'
+        giveaway['cancelled_at'] = datetime.now().isoformat()
+        giveaway['cancelled_by'] = str(admin_id)
+        
+        # Mover para a lista de sorteios concluídos
+        giveaways['completed'][giveaway_id] = giveaway
+        del giveaways['active'][giveaway_id]
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error cancelling giveaway: {e}")
+        return False
+
+def get_giveaways_for_admin():
+    """
+    Retorna todos os sorteios para exibição no painel de administração
+    
+    Returns:
+        dict: Dicionário com sorteios ativos e concluídos
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Separar sorteios por status para facilitar a exibição
+        active = {}
+        pending_draw = {}
+        winners_selected = {}
+        completed = {}
+        cancelled = {}
+        
+        # Processar sorteios ativos
+        for gid, giveaway in giveaways['active'].items():
+            if giveaway['status'] == 'active':
+                active[gid] = giveaway
+            elif giveaway['status'] == 'pending_draw' or giveaway['status'] == 'pending_redraw':
+                pending_draw[gid] = giveaway
+            elif giveaway['status'] == 'winners_selected':
+                winners_selected[gid] = giveaway
+        
+        # Processar sorteios concluídos
+        for gid, giveaway in giveaways['completed'].items():
+            if giveaway['status'] == 'completed':
+                completed[gid] = giveaway
+            elif giveaway['status'] == 'cancelled':
+                cancelled[gid] = giveaway
+        
+        return {
+            'active': active,
+            'pending_draw': pending_draw,
+            'winners_selected': winners_selected,
+            'completed': completed,
+            'cancelled': cancelled
+        }
+    except Exception as e:
+        logger.error(f"Error getting giveaways for admin: {e}")
+        return {'active': {}, 'pending_draw': {}, 'winners_selected': {}, 'completed': {}, 'cancelled': {}}
+
+def update_giveaway_message_id(giveaway_id, message_id):
+    """
+    Atualiza o ID da mensagem do sorteio no Telegram
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+        message_id (int): ID da mensagem no Telegram
+    
+    Returns:
+        bool: True se atualizado com sucesso, False caso contrário
+    """
+    try:
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        
+        # Verificar se o sorteio existe e está ativo
+        if giveaway_id not in giveaways['active']:
+            return False
+        
+        # Atualizar o ID da mensagem
+        giveaways['active'][giveaway_id]['message_id'] = message_id
+        
+        # Salvar alterações
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error updating giveaway message ID: {e}")
+        return False

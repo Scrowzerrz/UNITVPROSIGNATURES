@@ -1,0 +1,491 @@
+{% extends 'layout.html' %}
+
+{% block title %}Sorteios - UniTV Admin{% endblock %}
+
+{% block page_title %}Gerenciamento de Sorteios{% endblock %}
+
+{% block top_nav_actions %}
+<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createGiveawayModal">
+    <i class="fas fa-gift me-1"></i> Criar Novo Sorteio
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Alert Messages -->
+    {% if message %}
+    <div class="alert alert-{{ message_type }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endif %}
+    
+    <!-- Active Giveaways -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Sorteios Ativos</h6>
+            <span class="badge bg-primary">{{ giveaways.active|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if giveaways.active %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="activeGiveawaysTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Plano</th>
+                            <th>Ganhadores</th>
+                            <th>Participantes</th>
+                            <th>Término</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gid, giveaway in giveaways.active.items() %}
+                        <tr>
+                            <td>{{ giveaway.id }}</td>
+                            <td>{{ giveaway.plan_name }}</td>
+                            <td>{{ giveaway.winners_count }}</td>
+                            <td>
+                                {{ giveaway.participants|length }}
+                                {% if giveaway.max_participants %}
+                                / {{ giveaway.max_participants }}
+                                {% endif %}
+                            </td>
+                            <td data-sort="{{ giveaway.ends_at }}">{{ giveaway.ends_at|formatdate }}</td>
+                            <td>
+                                <span class="badge bg-success">Ativo</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewGiveaway('{{ gid }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="confirmCancel('{{ gid }}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center">Não há sorteios ativos no momento.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Pending Draw Giveaways -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-warning">Sorteios Aguardando Sorteio</h6>
+            <span class="badge bg-warning text-dark">{{ giveaways.pending_draw|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if giveaways.pending_draw %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="pendingDrawTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Plano</th>
+                            <th>Ganhadores</th>
+                            <th>Participantes</th>
+                            <th>Término</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gid, giveaway in giveaways.pending_draw.items() %}
+                        <tr>
+                            <td>{{ giveaway.id }}</td>
+                            <td>{{ giveaway.plan_name }}</td>
+                            <td>{{ giveaway.winners_count }}</td>
+                            <td>
+                                {{ giveaway.participants|length }}
+                                {% if giveaway.max_participants %}
+                                / {{ giveaway.max_participants }}
+                                {% endif %}
+                            </td>
+                            <td data-sort="{{ giveaway.ends_at }}">{{ giveaway.ends_at|formatdate }}</td>
+                            <td>
+                                <span class="badge bg-warning text-dark">Pendente Sorteio</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewGiveaway('{{ gid }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-primary" onclick="drawWinners('{{ gid }}')">
+                                    <i class="fas fa-trophy"></i> Sortear
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center">Não há sorteios aguardando sorteio no momento.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Winners Selected -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-info">Sorteios com Ganhadores Selecionados</h6>
+            <span class="badge bg-info">{{ giveaways.winners_selected|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if giveaways.winners_selected %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="winnersSelectedTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Plano</th>
+                            <th>Ganhadores</th>
+                            <th>Participantes</th>
+                            <th>Sorteado em</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gid, giveaway in giveaways.winners_selected.items() %}
+                        <tr>
+                            <td>{{ giveaway.id }}</td>
+                            <td>{{ giveaway.plan_name }}</td>
+                            <td>{{ giveaway.winners|length }} / {{ giveaway.winners_count }}</td>
+                            <td>{{ giveaway.participants|length }}</td>
+                            <td data-sort="{{ giveaway.drawn_at }}">{{ giveaway.drawn_at|formatdate }}</td>
+                            <td>
+                                <span class="badge bg-info">Ganhadores Selecionados</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewGiveaway('{{ gid }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="viewWinners('{{ gid }}')">
+                                    <i class="fas fa-users"></i> Ganhadores
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center">Não há sorteios com ganhadores selecionados no momento.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Completed Giveaways -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-success">Sorteios Concluídos</h6>
+            <span class="badge bg-success">{{ giveaways.completed|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if giveaways.completed %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="completedGiveawaysTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Plano</th>
+                            <th>Ganhadores</th>
+                            <th>Participantes</th>
+                            <th>Concluído em</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gid, giveaway in giveaways.completed.items() %}
+                        <tr>
+                            <td>{{ giveaway.id }}</td>
+                            <td>{{ giveaway.plan_name }}</td>
+                            <td>{{ giveaway.winners|length }} / {{ giveaway.winners_count }}</td>
+                            <td>{{ giveaway.participants|length }}</td>
+                            <td data-sort="{{ giveaway.completed_at }}">{{ giveaway.completed_at|formatdate }}</td>
+                            <td>
+                                <span class="badge bg-success">Concluído</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewGiveaway('{{ gid }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-secondary" onclick="viewWinners('{{ gid }}')">
+                                    <i class="fas fa-users"></i> Ganhadores
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center">Não há sorteios concluídos.</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Cancelled Giveaways -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-danger">Sorteios Cancelados</h6>
+            <span class="badge bg-danger">{{ giveaways.cancelled|length }}</span>
+        </div>
+        <div class="card-body">
+            {% if giveaways.cancelled %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="cancelledGiveawaysTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Plano</th>
+                            <th>Ganhadores</th>
+                            <th>Participantes</th>
+                            <th>Cancelado em</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gid, giveaway in giveaways.cancelled.items() %}
+                        <tr>
+                            <td>{{ giveaway.id }}</td>
+                            <td>{{ giveaway.plan_name }}</td>
+                            <td>{{ giveaway.winners_count }}</td>
+                            <td>{{ giveaway.participants|length }}</td>
+                            <td data-sort="{{ giveaway.cancelled_at }}">{{ giveaway.cancelled_at|formatdate }}</td>
+                            <td>
+                                <span class="badge bg-danger">Cancelado</span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info" onclick="viewGiveaway('{{ gid }}')">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-center">Não há sorteios cancelados.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Create Giveaway Modal -->
+<div class="modal fade" id="createGiveawayModal" tabindex="-1" aria-labelledby="createGiveawayModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createGiveawayModalLabel">Criar Novo Sorteio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('create_giveaway_route') }}" method="POST">
+                    <div class="mb-3">
+                        <label for="plan_type" class="form-label">Plano a ser Sorteado</label>
+                        <select class="form-select" id="plan_type" name="plan_type" required>
+                            <option value="" selected disabled>Selecione um plano</option>
+                            <option value="30_days">Plano 30 Dias</option>
+                            <option value="6_months">Plano 6 Meses</option>
+                            <option value="1_year">Plano 1 Ano</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="winners_count" class="form-label">Número de Ganhadores</label>
+                        <input type="number" class="form-control" id="winners_count" name="winners_count" min="1" max="10" value="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="duration_hours" class="form-label">Duração do Sorteio (horas)</label>
+                        <input type="number" class="form-control" id="duration_hours" name="duration_hours" min="1" max="168" value="24" required>
+                        <small class="form-text text-muted">Máximo de 168 horas (7 dias).</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="max_participants" class="form-label">Número Máximo de Participantes</label>
+                        <input type="number" class="form-control" id="max_participants" name="max_participants" min="0">
+                        <small class="form-text text-muted">Deixe em branco para não ter limite de participantes.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Descrição do Sorteio</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                        <small class="form-text text-muted">Opcional. Será exibido aos usuários no bot.</small>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Criar Sorteio</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Giveaway Modal -->
+<div class="modal fade" id="viewGiveawayModal" tabindex="-1" aria-labelledby="viewGiveawayModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewGiveawayModalLabel">Detalhes do Sorteio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="giveawayDetails">
+                <!-- Content will be loaded dynamically -->
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Winners Modal -->
+<div class="modal fade" id="viewWinnersModal" tabindex="-1" aria-labelledby="viewWinnersModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="viewWinnersModalLabel">Ganhadores do Sorteio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="winnersDetails">
+                <!-- Content will be loaded dynamically -->
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Giveaway Modal -->
+<div class="modal fade" id="cancelGiveawayModal" tabindex="-1" aria-labelledby="cancelGiveawayModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cancelGiveawayModalLabel">Cancelar Sorteio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja cancelar este sorteio? Esta ação não pode ser desfeita.</p>
+                <form id="cancelGiveawayForm" action="{{ url_for('cancel_giveaway_route') }}" method="POST">
+                    <input type="hidden" id="cancel_giveaway_id" name="giveaway_id">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-danger" onclick="document.getElementById('cancelGiveawayForm').submit();">Confirmar Cancelamento</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Initialize DataTables
+        $('#activeGiveawaysTable').DataTable({
+            "order": [[4, "asc"]],
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            }
+        });
+        
+        $('#pendingDrawTable').DataTable({
+            "order": [[4, "asc"]],
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            }
+        });
+        
+        $('#winnersSelectedTable').DataTable({
+            "order": [[4, "desc"]],
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            }
+        });
+        
+        $('#completedGiveawaysTable').DataTable({
+            "order": [[4, "desc"]],
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            }
+        });
+        
+        $('#cancelledGiveawaysTable').DataTable({
+            "order": [[4, "desc"]],
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            }
+        });
+    });
+    
+    function viewGiveaway(giveawayId) {
+        $('#giveawayDetails').html('<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+        
+        // Load giveaway details via AJAX
+        $.ajax({
+            url: "{{ url_for('get_giveaway_details') }}",
+            type: "GET",
+            data: { giveaway_id: giveawayId },
+            success: function(response) {
+                $('#giveawayDetails').html(response);
+                $('#viewGiveawayModal').modal('show');
+            },
+            error: function() {
+                $('#giveawayDetails').html('<div class="alert alert-danger">Erro ao carregar detalhes do sorteio.</div>');
+                $('#viewGiveawayModal').modal('show');
+            }
+        });
+    }
+    
+    function viewWinners(giveawayId) {
+        $('#winnersDetails').html('<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+        
+        // Load winners details via AJAX
+        $.ajax({
+            url: "{{ url_for('get_giveaway_winners') }}",
+            type: "GET",
+            data: { giveaway_id: giveawayId },
+            success: function(response) {
+                $('#winnersDetails').html(response);
+                $('#viewWinnersModal').modal('show');
+            },
+            error: function() {
+                $('#winnersDetails').html('<div class="alert alert-danger">Erro ao carregar detalhes dos ganhadores.</div>');
+                $('#viewWinnersModal').modal('show');
+            }
+        });
+    }
+    
+    function drawWinners(giveawayId) {
+        if (confirm('Tem certeza que deseja realizar o sorteio agora?')) {
+            window.location.href = "{{ url_for('draw_giveaway_winners_route') }}?giveaway_id=" + giveawayId;
+        }
+    }
+    
+    function confirmCancel(giveawayId) {
+        $('#cancel_giveaway_id').val(giveawayId);
+        $('#cancelGiveawayModal').modal('show');
+    }
+</script>
+{% endblock %}
