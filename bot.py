@@ -2538,14 +2538,93 @@ def reopen_ticket_user(call):
     else:
         bot.answer_callback_query(call.id, "❌ Ocorreu um erro ao reabrir o ticket. Tente novamente.")
 
+# Função para notificar administradores sobre novos tickets ou respostas
+def notify_admins_about_ticket_reply(ticket_id, user_id, message_text):
+    """
+    Notifica os administradores sobre um novo ticket ou resposta em um ticket
+    
+    Args:
+        ticket_id (str): ID do ticket
+        user_id (str): ID do usuário que enviou a mensagem
+        message_text (str): Texto da mensagem
+    
+    Returns:
+        bool: True se pelo menos um admin foi notificado
+    """
+    # Obter informações do ticket para notificação
+    notification_info = support.notify_admins_about_ticket_reply(ticket_id, user_id, message_text)
+    
+    if not notification_info:
+        logger.error(f"Falha ao preparar notificação para o ticket {ticket_id}")
+        return False
+    
+    # Obter lista de admins
+    admin_ids = support.get_all_admin_ids()
+    if not admin_ids:
+        logger.error("Nenhum admin encontrado para notificar sobre ticket")
+        return False
+    
+    # Preparar mensagem de notificação
+    ticket = notification_info['ticket']
+    user_name = notification_info['user_name']
+    
+    # Verificar se é um novo ticket ou uma resposta
+    is_new = len(ticket['messages']) == 1
+    
+    if is_new:
+        notification_message = (
+            f"🆕 *Novo Ticket de Suporte* #{ticket_id}\n\n"
+            f"De: {user_name} (ID: {user_id})\n"
+            f"Mensagem:\n"
+            f"```\n{message_text}\n```\n\n"
+            f"Responda usando o painel de administração ou diretamente pelo bot."
+        )
+    else:
+        notification_message = (
+            f"📩 *Nova Resposta em Ticket* #{ticket_id}\n\n"
+            f"De: {user_name} (ID: {user_id})\n"
+            f"Mensagem:\n"
+            f"```\n{message_text}\n```\n\n"
+            f"Responda usando o painel de administração ou diretamente pelo bot."
+        )
+    
+    # Criar botões para ação rápida
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("✅ Marcar como Lido", callback_data=f"ticket_read_{ticket_id}"),
+        types.InlineKeyboardButton("📝 Responder", callback_data=f"ticket_reply_{ticket_id}")
+    )
+    
+    # Enviar notificação para todos os admins
+    notified_count = 0
+    for admin_id in admin_ids:
+        try:
+            bot.send_message(
+                admin_id,
+                notification_message,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            notified_count += 1
+        except Exception as e:
+            logger.error(f"Erro ao notificar admin {admin_id} sobre ticket: {e}")
+    
+    logger.info(f"{notified_count} admins notificados sobre ticket #{ticket_id}")
+    return notified_count > 0
+
+
 # Tarefa em segundo plano para verificar tickets não lidos e notificar admin
 def check_support_tickets():
+    logger.info("Iniciando thread de verificação de tickets de suporte")
+    
     while True:
         try:
             # Obter tickets que precisam de notificação ao admin
             tickets_needing_notification = get_tickets_needing_admin_notification()
             
             if tickets_needing_notification:
+                logger.info(f"Encontrados {len(tickets_needing_notification)} tickets necessitando notificação")
+                
                 # Para cada ticket, verificar se o admin já foi notificado
                 for ticket in tickets_needing_notification:
                     ticket_id = ticket['id']
@@ -2561,9 +2640,11 @@ def check_support_tickets():
                     if last_user_message:
                         # Notificar admin sobre novo ticket ou resposta
                         notify_admins_about_ticket_reply(ticket_id, user_id, last_user_message['text'])
-                                        
+                        
                         # Marcar que admin foi notificado
                         mark_ticket_messages_as_read(ticket_id, 'admin')
+                        
+                        logger.info(f"Admin notificado sobre ticket #{ticket_id} do usuário {user_id}")
         
         except Exception as e:
             logger.error(f"Erro na tarefa de verificação de tickets: {e}")

@@ -350,3 +350,69 @@ def get_tickets_needing_admin_notification():
     except Exception as e:
         logger.error(f"Error getting tickets needing admin notification: {e}")
         return []
+
+
+def get_all_admin_ids():
+    """
+    Obtém uma lista de IDs de todos os administradores
+    
+    Returns:
+        list: Lista com IDs dos administradores
+    """
+    from config import AUTH_FILE
+    from utils import is_admin_telegram_id
+    
+    try:
+        auth_data = read_json_file(AUTH_FILE)
+        
+        admin_ids = []
+        
+        # Adiciona administradores do arquivo de autenticação
+        for admin_id in auth_data.get('admin_telegram_ids', []):
+            admin_ids.append(admin_id)
+        
+        # Adiciona o admin principal do .env
+        from config import ADMIN_ID
+        if ADMIN_ID and ADMIN_ID not in admin_ids:
+            admin_ids.append(ADMIN_ID)
+            
+        return admin_ids
+    except Exception as e:
+        logger.error(f"Error getting admin IDs: {e}")
+        # Fallback para o admin principal
+        from config import ADMIN_ID
+        return [ADMIN_ID] if ADMIN_ID else []
+
+
+def notify_admins_about_ticket_reply(ticket_id, user_id, message_text):
+    """
+    Prepara as informações para notificar os administradores sobre uma nova resposta em um ticket
+    
+    Args:
+        ticket_id (str): ID do ticket
+        user_id (str): ID do usuário que respondeu
+        message_text (str): Texto da mensagem
+    
+    Returns:
+        dict: Informações para notificação
+    """
+    try:
+        # Obter informações adicionais do ticket
+        ticket = get_ticket(ticket_id)
+        
+        if not ticket:
+            logger.error(f"Ticket {ticket_id} não encontrado ao tentar notificar admin")
+            return None
+            
+        # Retorna as informações necessárias para notificação
+        return {
+            'ticket_id': ticket_id,
+            'user_id': user_id,
+            'user_name': ticket.get('user_name', f"User {user_id}"),
+            'message': message_text,
+            'ticket': ticket
+        }
+        
+    except Exception as e:
+        logger.error(f"Error preparing admin notification for ticket: {e}")
+        return None
