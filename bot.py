@@ -200,11 +200,82 @@ def check_login_availability():
         # Run every 5 minutes
         time.sleep(300)
 
+# Check giveaways tasks
+def check_giveaways():
+    """Check for expired giveaway confirmations and redraws"""
+    while True:
+        try:
+            # Verificar confirmações expiradas
+            redraws_needed = check_expired_confirmations()
+            
+            # Notificar novos ganhadores, se houver
+            for giveaway_id, info in redraws_needed.items():
+                giveaway = info.get('giveaway')
+                expired_winners = info.get('expired_winners', [])
+                
+                if not giveaway:
+                    continue
+                
+                # Realizar novo sorteio
+                new_winners = redraw_giveaway(giveaway_id, len(expired_winners))
+                
+                if not new_winners:
+                    continue
+                
+                # Notificar novos ganhadores
+                for winner_id in new_winners:
+                    try:
+                        # Enviar mensagem para o ganhador
+                        keyboard = types.InlineKeyboardMarkup()
+                        keyboard.add(
+                            types.InlineKeyboardButton(
+                                "✅ Confirmar Participação",
+                                callback_data=f"confirm_giveaway_{giveaway_id}"
+                            )
+                        )
+                        
+                        bot.send_message(
+                            winner_id,
+                            f"🎉 *PARABÉNS! Você foi sorteado!* 🎉\n\n"
+                            f"Você ganhou o seguinte plano no sorteio:\n"
+                            f"*{giveaway['plan_name']}*\n\n"
+                            f"⚠️ *ATENÇÃO*: Você tem 10 minutos para confirmar sua participação clicando no botão abaixo.\n"
+                            f"Caso contrário, um novo ganhador será sorteado.",
+                            parse_mode="Markdown",
+                            reply_markup=keyboard
+                        )
+                        
+                        # Notificar admin
+                        bot.send_message(
+                            ADMIN_ID,
+                            f"🔄 *NOVO SORTEIO REALIZADO* 🔄\n\n"
+                            f"Sorteio #{giveaway_id}\n"
+                            f"Plano: {giveaway['plan_name']}\n"
+                            f"Novo ganhador: {winner_id}\n"
+                            f"(Substituindo ganhador que não confirmou)",
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.error(f"Erro ao notificar novo ganhador {winner_id}: {e}")
+                
+        except Exception as e:
+            logger.error(f"Error in giveaway background task: {e}")
+        
+        # Run every 1 minute
+        time.sleep(60)
+
+
 # Start background tasks
 def start_background_tasks():
-    thread = threading.Thread(target=check_login_availability)
-    thread.daemon = True
-    thread.start()
+    # Thread para verificar disponibilidade de logins
+    login_thread = threading.Thread(target=check_login_availability)
+    login_thread.daemon = True
+    login_thread.start()
+    
+    # Thread para verificar sorteios
+    giveaway_thread = threading.Thread(target=check_giveaways)
+    giveaway_thread.daemon = True
+    giveaway_thread.start()
 
 # Start command
 @bot.message_handler(commands=['start'])
@@ -285,6 +356,12 @@ def start_command(message):
         types.InlineKeyboardButton("💬 Suporte", callback_data="support"),
         types.InlineKeyboardButton("🔗 Programa de Indicação", callback_data="referral_program")
     )
+    
+    # Add giveaway button for admins
+    if is_admin_telegram_id(str(user_id)):
+        keyboard.add(
+            types.InlineKeyboardButton("🎰 Gerenciar Sorteios", callback_data="admin_giveaways")
+        )
     
     # Send the message
     bot.send_message(
@@ -2921,6 +2998,176 @@ def add_allowed_user_command(message):
         )
 
 # Back to start
+# Gerenciamento de sorteios (admin)
+@bot.callback_query_handler(func=lambda call: call.data == "admin_giveaways")
+def admin_giveaways_menu(call):
+    user_id = str(call.from_user.id)
+    
+    # Verificar se o usuário é admin
+    if not is_admin_telegram_id(user_id):
+        bot.answer_callback_query(call.id, "Acesso negado. Este recurso é exclusivo para administradores.")
+        return
+    
+    # Criar teclado com opções
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        types.InlineKeyboardButton("🆕 Criar Novo Sorteio", callback_data="create_giveaway"),
+        types.InlineKeyboardButton("📋 Listar Sorteios Ativos", callback_data="list_giveaways"),
+        types.InlineKeyboardButton("🔙 Voltar", callback_data="start")
+    )
+    
+    # Atualizar mensagem
+    bot.edit_message_text(
+        "🎰 *Gerenciamento de Sorteios* 🎰\n\n"
+        "Escolha uma opção para gerenciar os sorteios:",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data == "create_giveaway")
+def create_giveaway_from_menu(call):
+    # Simular a mensagem para a função existente
+    fake_message = types.Message(
+        message_id=call.message.message_id,
+        from_user=call.from_user,
+        date=None,
+        chat=call.message.chat,
+        content_type="text",
+        options={},
+        json_string=None
+    )
+    fake_message.text = "/giveaway create"
+    
+    # Chamar a função existente
+    giveaway_create_step1(fake_message)
+
+@bot.callback_query_handler(func=lambda call: call.data == "list_giveaways")
+def list_giveaways_from_menu(call):
+    # Obter sorteios ativos
+    giveaways = get_giveaways_for_admin()
+    
+    if not giveaways:
+        bot.edit_message_text(
+            "❌ *Nenhum Sorteio Ativo* ❌\n\n"
+            "Não há sorteios ativos no momento.",
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="Markdown",
+            reply_markup=types.InlineKeyboardMarkup().add(
+                types.InlineKeyboardButton("🔙 Voltar", callback_data="admin_giveaways")
+            )
+        )
+        return
+    
+    # Criar mensagem com a lista de sorteios
+    response = "🎰 *Sorteios Ativos* 🎰\n\n"
+    
+    # Criar teclado com botões para cada sorteio
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    
+    for giveaway_id, giveaway in giveaways.items():
+        if giveaway['status'] == 'active':
+            end_date = datetime.fromisoformat(giveaway["ends_at"])
+            remaining_time = end_date - datetime.now()
+            participants_count = len(giveaway.get('participants', {}))
+            max_participants = giveaway.get('max_participants', 'Sem limite')
+            
+            response += f"ID: `{giveaway_id}`\n"
+            response += f"Plano: *{giveaway['plan_name']}*\n"
+            response += f"Ganhadores: {giveaway['winners_count']}\n"
+            response += f"Participantes: {participants_count}/{max_participants}\n"
+            response += f"Encerra em: {remaining_time.days}d {remaining_time.seconds//3600}h {(remaining_time.seconds%3600)//60}m\n"
+            response += f"Status: {giveaway['status']}\n\n"
+            
+            # Adicionar botões para sortear e cancelar
+            keyboard.add(
+                types.InlineKeyboardButton(f"🎲 Sortear #{giveaway_id}", callback_data=f"menu_draw_{giveaway_id}"),
+                types.InlineKeyboardButton(f"❌ Cancelar #{giveaway_id}", callback_data=f"menu_cancel_{giveaway_id}")
+            )
+    
+    # Adicionar botão de voltar
+    keyboard.add(
+        types.InlineKeyboardButton("🔙 Voltar", callback_data="admin_giveaways")
+    )
+    
+    # Atualizar mensagem
+    bot.edit_message_text(
+        response,
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("menu_draw_"))
+def menu_draw_giveaway(call):
+    giveaway_id = call.data.replace("menu_draw_", "")
+    
+    # Simular a mensagem para a função existente
+    fake_message = types.Message(
+        message_id=call.message.message_id,
+        from_user=call.from_user,
+        date=None,
+        chat=call.message.chat,
+        content_type="text",
+        options={},
+        json_string=None
+    )
+    fake_message.text = f"/giveaway draw {giveaway_id}"
+    
+    # Chamar a função existente
+    giveaway_draw_command(fake_message, giveaway_id)
+    
+    # Voltar ao menu de sorteios após 3 segundos
+    time.sleep(3)
+    list_giveaways_from_menu(call)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("menu_cancel_"))
+def menu_cancel_giveaway(call):
+    giveaway_id = call.data.replace("menu_cancel_", "")
+    
+    # Confirmar antes de cancelar
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        types.InlineKeyboardButton("✅ Sim, Cancelar", callback_data=f"confirm_cancel_{giveaway_id}"),
+        types.InlineKeyboardButton("❌ Não, Voltar", callback_data="list_giveaways")
+    )
+    
+    bot.edit_message_text(
+        f"⚠️ *Confirmar Cancelamento* ⚠️\n\n"
+        f"Você tem certeza que deseja cancelar o sorteio #{giveaway_id}?\n\n"
+        f"Esta ação não pode ser desfeita.",
+        call.message.chat.id,
+        call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_cancel_"))
+def confirm_cancel_giveaway(call):
+    giveaway_id = call.data.replace("confirm_cancel_", "")
+    
+    # Simular a mensagem para a função existente
+    fake_message = types.Message(
+        message_id=call.message.message_id,
+        from_user=call.from_user,
+        date=None,
+        chat=call.message.chat,
+        content_type="text",
+        options={},
+        json_string=None
+    )
+    fake_message.text = f"/giveaway cancel {giveaway_id}"
+    
+    # Chamar a função existente
+    giveaway_cancel_command(fake_message, giveaway_id)
+    
+    # Voltar ao menu de sorteios após 3 segundos
+    time.sleep(3)
+    list_giveaways_from_menu(call)
+
 @bot.callback_query_handler(func=lambda call: call.data == "start")
 def back_to_start(call):
     user_id = call.from_user.id
@@ -2984,6 +3231,568 @@ def back_to_start(call):
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+
+# Comandos para gerenciar sorteios (admin)
+@bot.message_handler(commands=['giveaway'])
+def giveaway_command(message):
+    """Comando de gerenciamento de sorteios para administradores"""
+    user_id = str(message.from_user.id)
+    
+    # Verificar se o usuário é admin
+    if not is_admin_telegram_id(user_id):
+        bot.reply_to(
+            message, 
+            "⛔ Acesso negado. Este comando é exclusivo para administradores."
+        )
+        return
+    
+    args = message.text.split(maxsplit=1)
+    
+    # Se não houver argumentos, mostrar ajuda
+    if len(args) == 1:
+        bot.reply_to(
+            message,
+            "🎰 *Comandos de Sorteio* 🎰\n\n"
+            "/giveaway create - Criar um novo sorteio\n"
+            "/giveaway list - Listar sorteios ativos\n"
+            "/giveaway draw <id> - Sortear ganhadores de um sorteio\n"
+            "/giveaway cancel <id> - Cancelar um sorteio\n"
+            "/giveaway help - Mostrar esta ajuda",
+            parse_mode="Markdown"
+        )
+        return
+    
+    # Analisar subcomando
+    subcommand = args[1].split()
+    
+    if subcommand[0] == "create":
+        giveaway_create_step1(message)
+    elif subcommand[0] == "list":
+        giveaway_list_command(message)
+    elif subcommand[0] == "draw" and len(subcommand) > 1:
+        giveaway_draw_command(message, subcommand[1])
+    elif subcommand[0] == "cancel" and len(subcommand) > 1:
+        giveaway_cancel_command(message, subcommand[1])
+    elif subcommand[0] == "help":
+        bot.reply_to(
+            message,
+            "🎰 *Comandos de Sorteio* 🎰\n\n"
+            "/giveaway create - Criar um novo sorteio\n"
+            "/giveaway list - Listar sorteios ativos\n"
+            "/giveaway draw <id> - Sortear ganhadores de um sorteio\n"
+            "/giveaway cancel <id> - Cancelar um sorteio\n"
+            "/giveaway help - Mostrar esta ajuda",
+            parse_mode="Markdown"
+        )
+    else:
+        bot.reply_to(
+            message,
+            "❌ Comando inválido. Use /giveaway help para ver os comandos disponíveis."
+        )
+
+def giveaway_create_step1(message):
+    """Inicia o processo de criação de um sorteio - Passo 1: Selecionar plano"""
+    keyboard = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Adicionar botões para cada tipo de plano
+    for plan_id, plan in PLANS.items():
+        keyboard.add(
+            types.InlineKeyboardButton(
+                f"{plan['name']}",
+                callback_data=f"create_giveaway_plan_{plan_id}"
+            )
+        )
+    
+    # Adicionar botão de cancelamento
+    keyboard.add(
+        types.InlineKeyboardButton("❌ Cancelar", callback_data="cancel_giveaway_creation")
+    )
+    
+    # Enviar mensagem com seleção de plano
+    bot.reply_to(
+        message,
+        "🎰 *Criação de Sorteio - Passo 1/4* 🎰\n\n"
+        "Selecione o tipo de plano a ser sorteado:",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("create_giveaway_plan_"))
+def giveaway_create_step2(call):
+    """Processo de criação de sorteio - Passo 2: Número de ganhadores"""
+    plan_type = call.data.replace("create_giveaway_plan_", "")
+    
+    # Criar teclado com opções de número de ganhadores
+    keyboard = types.InlineKeyboardMarkup(row_width=3)
+    row1 = []
+    row2 = []
+    
+    for i in range(1, 11):
+        if i <= 5:
+            row1.append(types.InlineKeyboardButton(str(i), callback_data=f"create_giveaway_winners_{plan_type}_{i}"))
+        else:
+            row2.append(types.InlineKeyboardButton(str(i), callback_data=f"create_giveaway_winners_{plan_type}_{i}"))
+    
+    keyboard.add(*row1)
+    keyboard.add(*row2)
+    
+    # Adicionar botão de cancelamento
+    keyboard.add(
+        types.InlineKeyboardButton("❌ Cancelar", callback_data="cancel_giveaway_creation")
+    )
+    
+    # Atualizar mensagem
+    bot.edit_message_text(
+        f"🎰 *Criação de Sorteio - Passo 2/4* 🎰\n\n"
+        f"Plano selecionado: *{PLANS[plan_type]['name']}*\n\n"
+        f"Selecione o número de ganhadores (1-10):",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("create_giveaway_winners_"))
+def giveaway_create_step3(call):
+    """Processo de criação de sorteio - Passo 3: Duração do sorteio"""
+    parts = call.data.split("_")
+    plan_type = parts[3]
+    winners_count = parts[4]
+    
+    # Criar teclado com opções de duração
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    
+    durations = [
+        ("1 hora", 1),
+        ("6 horas", 6),
+        ("12 horas", 12),
+        ("24 horas", 24),
+        ("48 horas", 48),
+        ("72 horas", 72)
+    ]
+    
+    buttons = []
+    for label, hours in durations:
+        buttons.append(types.InlineKeyboardButton(
+            label, 
+            callback_data=f"create_giveaway_duration_{plan_type}_{winners_count}_{hours}"
+        ))
+    
+    keyboard.add(*buttons)
+    
+    # Adicionar botão de cancelamento
+    keyboard.add(
+        types.InlineKeyboardButton("❌ Cancelar", callback_data="cancel_giveaway_creation")
+    )
+    
+    # Atualizar mensagem
+    bot.edit_message_text(
+        f"🎰 *Criação de Sorteio - Passo 3/4* 🎰\n\n"
+        f"Plano: *{PLANS[plan_type]['name']}*\n"
+        f"Ganhadores: *{winners_count}*\n\n"
+        f"Selecione a duração do sorteio:",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("create_giveaway_duration_"))
+def giveaway_create_step4(call):
+    """Processo de criação de sorteio - Passo 4: Limite de participantes (opcional)"""
+    parts = call.data.split("_")
+    plan_type = parts[3]
+    winners_count = parts[4]
+    duration_hours = parts[5]
+    
+    # Criar teclado com opções de limite de participantes
+    keyboard = types.InlineKeyboardMarkup(row_width=2)
+    
+    limits = [
+        ("Sem limite", 0),
+        ("10 participantes", 10),
+        ("25 participantes", 25),
+        ("50 participantes", 50),
+        ("100 participantes", 100),
+        ("200 participantes", 200)
+    ]
+    
+    buttons = []
+    for label, limit in limits:
+        buttons.append(types.InlineKeyboardButton(
+            label, 
+            callback_data=f"create_giveaway_limit_{plan_type}_{winners_count}_{duration_hours}_{limit}"
+        ))
+    
+    keyboard.add(*buttons)
+    
+    # Adicionar botão de cancelamento
+    keyboard.add(
+        types.InlineKeyboardButton("❌ Cancelar", callback_data="cancel_giveaway_creation")
+    )
+    
+    # Atualizar mensagem
+    bot.edit_message_text(
+        f"🎰 *Criação de Sorteio - Passo 4/4* 🎰\n\n"
+        f"Plano: *{PLANS[plan_type]['name']}*\n"
+        f"Ganhadores: *{winners_count}*\n"
+        f"Duração: *{duration_hours} horas*\n\n"
+        f"Selecione o limite de participantes (opcional):",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("create_giveaway_limit_"))
+def giveaway_create_final(call):
+    """Finaliza o processo de criação de sorteio"""
+    parts = call.data.split("_")
+    plan_type = parts[3]
+    winners_count = int(parts[4])
+    duration_hours = int(parts[5])
+    max_participants = int(parts[6])
+    
+    # Converter 0 para None (sem limite)
+    if max_participants == 0:
+        max_participants = None
+    
+    # Criar sorteio
+    admin_id = call.from_user.id
+    giveaway_id = create_giveaway(admin_id, plan_type, winners_count, duration_hours, max_participants)
+    
+    if giveaway_id:
+        # Criar botão para compartilhar o sorteio
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(
+            types.InlineKeyboardButton("📣 Anunciar Sorteio", callback_data=f"announce_giveaway_{giveaway_id}")
+        )
+        
+        # Mostrar mensagem de sucesso
+        bot.edit_message_text(
+            f"✅ *Sorteio Criado com Sucesso!* ✅\n\n"
+            f"ID do Sorteio: `{giveaway_id}`\n"
+            f"Plano: *{PLANS[plan_type]['name']}*\n"
+            f"Ganhadores: *{winners_count}*\n"
+            f"Duração: *{duration_hours} horas*\n"
+            f"Limite de Participantes: *{max_participants if max_participants else 'Sem limite'}*\n\n"
+            f"Use o botão abaixo para anunciar o sorteio:",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    else:
+        # Mostrar mensagem de erro
+        bot.edit_message_text(
+            "❌ *Erro ao criar sorteio* ❌\n\n"
+            "Não foi possível criar o sorteio. Por favor, tente novamente.",
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            parse_mode="Markdown"
+        )
+
+@bot.callback_query_handler(func=lambda call: call.data == "cancel_giveaway_creation")
+def cancel_giveaway_creation(call):
+    """Cancela o processo de criação de sorteio"""
+    bot.edit_message_text(
+        "⚠️ *Criação de Sorteio Cancelada* ⚠️",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode="Markdown"
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("announce_giveaway_"))
+def announce_giveaway(call):
+    """Anuncia um sorteio para todos os usuários"""
+    giveaway_id = call.data.replace("announce_giveaway_", "")
+    
+    # Obter informações do sorteio
+    giveaway = get_giveaway(giveaway_id)
+    
+    if not giveaway:
+        bot.answer_callback_query(call.id, "Sorteio não encontrado")
+        return
+    
+    # Criar mensagem de anúncio
+    end_date = datetime.fromisoformat(giveaway["ends_at"])
+    remaining_time = end_date - datetime.now()
+    hours, remainder = divmod(remaining_time.seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    
+    # Criar botão para participar
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton(
+            "🎲 Participar do Sorteio (0/0)", 
+            callback_data=f"join_giveaway_{giveaway_id}"
+        )
+    )
+    
+    # Enviar anúncio
+    max_text = f"Máximo: {giveaway['max_participants']} participantes" if giveaway['max_participants'] else "Sem limite de participantes"
+    
+    message = bot.send_message(
+        call.message.chat.id,
+        f"🎉 *SORTEIO ABERTO!* 🎉\n\n"
+        f"Prêmio: *{giveaway['plan_name']}*\n"
+        f"Ganhadores: *{giveaway['winners_count']}*\n"
+        f"Encerra em: *{remaining_time.days}d {hours}h {minutes}m*\n"
+        f"{max_text}\n\n"
+        f"Clique no botão abaixo para participar!",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+    
+    # Atualizar o ID da mensagem no registro do sorteio
+    # TODO: implementar função para salvar message_id no sorteio
+    
+    # Confirmar para o admin
+    bot.edit_message_text(
+        f"✅ *Sorteio Anunciado!* ✅\n\n"
+        f"ID do Sorteio: `{giveaway_id}`\n"
+        f"Você pode usar os seguintes comandos para gerenciar:\n"
+        f"`/giveaway list` - Listar sorteios ativos\n"
+        f"`/giveaway draw {giveaway_id}` - Sortear ganhadores\n"
+        f"`/giveaway cancel {giveaway_id}` - Cancelar sorteio",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode="Markdown"
+    )
+
+def giveaway_list_command(message):
+    """Lista todos os sorteios ativos"""
+    # Verificar se o usuário é admin
+    user_id = str(message.from_user.id)
+    if not is_admin_telegram_id(user_id):
+        bot.reply_to(message, "⛔ Acesso negado. Este comando é exclusivo para administradores.")
+        return
+    
+    # Obter sorteios ativos
+    giveaways = get_giveaways_for_admin()
+    
+    if not giveaways:
+        bot.reply_to(message, "❌ Não há sorteios ativos no momento.")
+        return
+    
+    # Criar mensagem com a lista de sorteios
+    response = "🎰 *Sorteios Ativos* 🎰\n\n"
+    
+    for giveaway_id, giveaway in giveaways.items():
+        if giveaway['status'] == 'active':
+            end_date = datetime.fromisoformat(giveaway["ends_at"])
+            remaining_time = end_date - datetime.now()
+            participants_count = len(giveaway.get('participants', {}))
+            max_participants = giveaway.get('max_participants', 'Sem limite')
+            
+            response += f"ID: `{giveaway_id}`\n"
+            response += f"Plano: *{giveaway['plan_name']}*\n"
+            response += f"Ganhadores: {giveaway['winners_count']}\n"
+            response += f"Participantes: {participants_count}/{max_participants}\n"
+            response += f"Encerra em: {remaining_time.days}d {remaining_time.seconds//3600}h {(remaining_time.seconds%3600)//60}m\n"
+            response += f"Status: {giveaway['status']}\n\n"
+    
+    bot.reply_to(message, response, parse_mode="Markdown")
+
+def giveaway_draw_command(message, giveaway_id):
+    """Comando para sortear ganhadores de um sorteio"""
+    # Verificar se o usuário é admin
+    user_id = str(message.from_user.id)
+    if not is_admin_telegram_id(user_id):
+        bot.reply_to(message, "⛔ Acesso negado. Este comando é exclusivo para administradores.")
+        return
+    
+    # Realizar o sorteio
+    winners = draw_giveaway_winners(giveaway_id)
+    
+    if winners is None:
+        bot.reply_to(
+            message, 
+            "❌ Não foi possível realizar o sorteio. Verifique se o sorteio existe e está ativo."
+        )
+        return
+    
+    if len(winners) == 0:
+        bot.reply_to(
+            message, 
+            "⚠️ Não há participantes suficientes para realizar o sorteio."
+        )
+        return
+    
+    # Obter detalhes do sorteio
+    giveaway = get_giveaway(giveaway_id)
+    
+    # Enviar mensagem com os ganhadores
+    response = f"🎉 *Sorteio #{giveaway_id} - Ganhadores* 🎉\n\n"
+    response += f"Plano: *{giveaway['plan_name']}*\n"
+    response += f"Total de participantes: {len(giveaway.get('participants', {}))}\n\n"
+    response += f"*Ganhadores:*\n"
+    
+    for winner_id in winners:
+        # Buscar informações do usuário (nome, username)
+        response += f"- ID: `{winner_id}`\n"
+    
+    response += "\n⚠️ Cada ganhador tem 10 minutos para confirmar a vitória."
+    
+    bot.reply_to(message, response, parse_mode="Markdown")
+    
+    # Notificar os ganhadores
+    for winner_id in winners:
+        try:
+            # Criar botão de confirmação
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    "✅ Confirmar Participação", 
+                    callback_data=f"confirm_giveaway_{giveaway_id}"
+                )
+            )
+            
+            # Enviar mensagem para o ganhador
+            bot.send_message(
+                winner_id,
+                f"🎉 *PARABÉNS! Você foi sorteado!* 🎉\n\n"
+                f"Você ganhou o seguinte plano no sorteio:\n"
+                f"*{giveaway['plan_name']}*\n\n"
+                f"⚠️ *ATENÇÃO*: Você tem 10 minutos para confirmar sua participação clicando no botão abaixo.\n"
+                f"Caso contrário, um novo ganhador será sorteado.",
+                parse_mode="Markdown",
+                reply_markup=keyboard
+            )
+        except Exception as e:
+            logger.error(f"Erro ao notificar ganhador {winner_id}: {e}")
+
+def giveaway_cancel_command(message, giveaway_id):
+    """Comando para cancelar um sorteio"""
+    # Verificar se o usuário é admin
+    user_id = str(message.from_user.id)
+    if not is_admin_telegram_id(user_id):
+        bot.reply_to(message, "⛔ Acesso negado. Este comando é exclusivo para administradores.")
+        return
+    
+    # Cancelar o sorteio
+    success = cancel_giveaway(giveaway_id, user_id)
+    
+    if success:
+        bot.reply_to(
+            message, 
+            f"✅ Sorteio #{giveaway_id} cancelado com sucesso."
+        )
+    else:
+        bot.reply_to(
+            message, 
+            "❌ Não foi possível cancelar o sorteio. Verifique se o sorteio existe e está ativo."
+        )
+
+# Comandos para usuários participarem dos sorteios
+@bot.callback_query_handler(func=lambda call: call.data.startswith("join_giveaway_"))
+def join_giveaway_callback(call):
+    """Permite que um usuário participe de um sorteio"""
+    user_id = str(call.from_user.id)
+    giveaway_id = call.data.replace("join_giveaway_", "")
+    
+    # Verificar se o usuário existe
+    user = get_user(user_id)
+    if not user:
+        # Criar o usuário se não existir
+        user = create_user(
+            user_id,
+            call.from_user.username,
+            call.from_user.first_name,
+            call.from_user.last_name
+        )
+    
+    # Adicionar o usuário como participante
+    success, current, maximum = add_participant_to_giveaway(
+        giveaway_id, 
+        user_id, 
+        call.from_user.username or "", 
+        call.from_user.first_name or ""
+    )
+    
+    if not success:
+        bot.answer_callback_query(
+            call.id, 
+            "Não foi possível participar do sorteio. Ele pode ter sido encerrado ou você já está participando.", 
+            show_alert=True
+        )
+        return
+    
+    # Atualizar o botão com o número atual de participantes
+    keyboard = types.InlineKeyboardMarkup()
+    button_text = f"🎲 Participar do Sorteio ({current}/{maximum if maximum else '∞'})"
+    keyboard.add(
+        types.InlineKeyboardButton(button_text, callback_data=f"join_giveaway_{giveaway_id}")
+    )
+    
+    try:
+        # Tentar atualizar a mensagem original
+        bot.edit_message_reply_markup(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f"Erro ao atualizar botão de sorteio: {e}")
+    
+    # Notificar o usuário
+    bot.answer_callback_query(
+        call.id, 
+        "✅ Você está participando do sorteio! Os vencedores serão anunciados quando o sorteio terminar.", 
+        show_alert=True
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("confirm_giveaway_"))
+def confirm_giveaway_win_callback(call):
+    """Confirma que um usuário aceitou o prêmio do sorteio"""
+    user_id = str(call.from_user.id)
+    giveaway_id = call.data.replace("confirm_giveaway_", "")
+    
+    # Confirmar a vitória
+    success = confirm_giveaway_win(giveaway_id, user_id)
+    
+    if not success:
+        bot.answer_callback_query(
+            call.id, 
+            "Não foi possível confirmar sua participação. O tempo limite pode ter expirado.", 
+            show_alert=True
+        )
+        return
+    
+    # Notificar o usuário sobre o sucesso
+    bot.edit_message_text(
+        f"✅ *Sua vitória foi confirmada!* ✅\n\n"
+        f"Um administrador entrará em contato para entregar seu prêmio.\n"
+        f"Aguarde o contato e obrigado pela participação!",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode="Markdown"
+    )
+    
+    # Notificar o administrador
+    try:
+        giveaway = get_giveaway(giveaway_id)
+        if giveaway:
+            admin_id = giveaway.get('admin_id')
+            if admin_id:
+                bot.send_message(
+                    admin_id,
+                    f"✅ *Confirmação de Vitória* ✅\n\n"
+                    f"Sorteio: #{giveaway_id}\n"
+                    f"Usuário: {call.from_user.first_name} (ID: {user_id})\n"
+                    f"Plano: {giveaway['plan_name']}\n\n"
+                    f"O ganhador confirmou a vitória e está aguardando o envio do login.",
+                    parse_mode="Markdown"
+                )
+    except Exception as e:
+        logger.error(f"Erro ao notificar administrador sobre confirmação: {e}")
+    
+    # Responder ao callback
+    bot.answer_callback_query(
+        call.id, 
+        "✅ Confirmação recebida! Um administrador entrará em contato para entregar seu prêmio.", 
+        show_alert=True
+    )
 
 # Track if the bot is already running, mas de uma forma menos restritiva
 _bot_running = False
