@@ -262,6 +262,20 @@ def dashboard():
         coupons = bot_config.get('coupons', {})
         active_coupons = len(coupons) if coupons else 0
         
+        # Count unread support tickets
+        telegram_id = session.get('telegram_id')
+        unread_tickets = 0
+        active_tickets = get_all_active_tickets()
+        
+        for ticket_id, ticket in active_tickets.items():
+            has_unread = False
+            for message in ticket['messages']:
+                if not message['read'] and message['from_type'] == 'user':
+                    has_unread = True
+                    break
+            if has_unread:
+                unread_tickets += 1
+        
         stats = {
             'total_users': len(users),
             'active_users': active_users,
@@ -270,7 +284,8 @@ def dashboard():
             'pending_approvals': pending_approvals,
             'waiting_for_login': waiting_for_login,
             'sales_status': sales_status,
-            'active_coupons': active_coupons
+            'active_coupons': active_coupons,
+            'unread_tickets': unread_tickets
         }
         
         logger.debug(f"Dashboard loaded with stats: {stats}")

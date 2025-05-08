@@ -1,0 +1,98 @@
+{% extends 'layout.html' %}
+
+{% block title %}Suporte - Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Sistema de Suporte</h1>
+    
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Tickets de Suporte Ativos</h6>
+                </div>
+                <div class="card-body">
+                    {% if tickets %}
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Usuário</th>
+                                        <th>Status</th>
+                                        <th>Criado em</th>
+                                        <th>Atualizado em</th>
+                                        <th>Mensagens</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ticket in tickets %}
+                                    <tr class="{{ 'table-warning' if not ticket.admin_notified else '' }}">
+                                        <td>{{ ticket.id }}</td>
+                                        <td>
+                                            {{ ticket.user_name }}
+                                            {% if ticket.username %}
+                                                <a href="https://t.me/{{ ticket.username }}" target="_blank" class="ml-1">
+                                                    <small>@{{ ticket.username }}</small>
+                                                </a>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-{{ 'success' if ticket.status == 'open' else 'secondary' }}">
+                                                {{ 'Aberto' if ticket.status == 'open' else 'Fechado' }}
+                                            </span>
+                                        </td>
+                                        <td>{{ ticket.created_at|replace("T", " ")|truncate(16, true, "") }}</td>
+                                        <td>{{ ticket.updated_at|replace("T", " ")|truncate(16, true, "") }}</td>
+                                        <td>
+                                            <span class="badge badge-info">Usuário: {{ ticket.user_replies }}</span>
+                                            <span class="badge badge-primary">Admin: {{ ticket.admin_replies }}</span>
+                                            
+                                            {% set unread_count = 0 %}
+                                            {% for message in ticket.messages %}
+                                                {% if not message.read and message.from_type == 'user' %}
+                                                    {% set unread_count = unread_count + 1 %}
+                                                {% endif %}
+                                            {% endfor %}
+                                            
+                                            {% if unread_count > 0 %}
+                                                <span class="badge badge-danger">{{ unread_count }} não lidas</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" class="btn btn-primary btn-sm">
+                                                Ver Ticket
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <p class="mb-0">Não há tickets de suporte ativos no momento.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Inicializa a tabela com DataTables
+        $('#dataTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
+            },
+            "order": [[4, "desc"]] // Ordena pela coluna de data atualizada (índice 4) decrescente
+        });
+    });
+</script>
+{% endblock %}

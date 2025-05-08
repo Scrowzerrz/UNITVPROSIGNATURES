@@ -1,0 +1,129 @@
+{% extends 'layout.html' %}
+
+{% block title %}Ticket #{{ ticket.id }} - Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            Ticket #{{ ticket.id }} 
+            <span class="badge badge-{{ 'success' if ticket.status == 'open' else 'secondary' }}">
+                {{ 'Aberto' if ticket.status == 'open' else 'Fechado' }}
+            </span>
+        </h1>
+        <div>
+            <a href="{{ url_for('support_dashboard') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            {% if ticket.status == 'open' %}
+            <form method="POST" action="{{ url_for('close_support_ticket', ticket_id=ticket.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Tem certeza que deseja fechar este ticket?');">
+                    <i class="fas fa-times"></i> Fechar Ticket
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações do Ticket</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>ID:</strong> {{ ticket.id }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Usuário:</strong> {{ ticket.user_name }}
+                        {% if ticket.username %}
+                            <a href="https://t.me/{{ ticket.username }}" target="_blank" class="ml-1">
+                                <small>@{{ ticket.username }}</small>
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <strong>ID do Telegram:</strong> {{ ticket.user_id }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Criado em:</strong> {{ ticket.created_at|replace("T", " ") }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Atualizado em:</strong> {{ ticket.updated_at|replace("T", " ") }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Mensagens do usuário:</strong> {{ ticket.user_replies }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Respostas do admin:</strong> {{ ticket.admin_replies }}
+                    </div>
+                    {% if ticket.status == 'closed' %}
+                    <div class="mb-2">
+                        <strong>Fechado em:</strong> {{ ticket.closed_at|replace("T", " ") }}
+                    </div>
+                    <div class="mb-2">
+                        <strong>Fechado por:</strong> {{ 'Administrador' if ticket.closed_by == 'admin' else 'Usuário' }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Conversa</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chat-container" style="max-height: 400px; overflow-y: auto;">
+                        {% for message in ticket.messages %}
+                        <div class="chat-message mb-3 {{ 'text-right' if message.from_type == 'admin' else '' }}">
+                            <div class="message-header mb-1">
+                                <small class="text-muted">
+                                    {{ message.timestamp|replace("T", " ") }} - 
+                                    {% if message.from_type == 'admin' %}
+                                        <strong class="text-primary">Administrador</strong>
+                                    {% else %}
+                                        <strong class="text-success">{{ ticket.user_name }}</strong>
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <div class="message-content p-3 {{ 'bg-light' if message.from_type == 'user' else 'bg-primary text-white' }}" style="border-radius: 10px; display: inline-block; max-width: 80%;">
+                                {{ message.text|replace('\n', '<br>')|safe }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    {% if ticket.status == 'open' %}
+                    <div class="reply-form mt-4">
+                        <form method="POST" action="{{ url_for('reply_to_ticket', ticket_id=ticket.id) }}">
+                            <div class="form-group">
+                                <label for="reply_text"><strong>Responder ao usuário:</strong></label>
+                                <textarea name="reply_text" id="reply_text" class="form-control" rows="4" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Enviar Resposta</button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-4">
+                        Este ticket está fechado. Não é possível enviar novas respostas.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Rola a conversa automaticamente para a última mensagem
+        var chatContainer = $('.chat-container');
+        chatContainer.scrollTop(chatContainer[0].scrollHeight);
+    });
+</script>
+{% endblock %}
