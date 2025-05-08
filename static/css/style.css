@@ -198,3 +198,32 @@ code {
 .template-item:hover {
     background-color: #f0f7ff;
 }
+
+/* Estilos para a exibição de status das mensagens */
+.message-footer {
+    font-size: 0.75rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(0,0,0,0.05);
+    color: #6c757d;
+}
+
+/* Estilo para indicadores de leitura */
+.fa-check {
+    color: #adb5bd;
+}
+
+.fa-check-double {
+    color: #4e73df;
+}
+
+/* Estilo para melhorar a exibição de mensagens longas */
+.message-text pre, .message-text code {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background-color: rgba(0,0,0,0.03);
+    padding: 8px;
+    border-radius: 4px;
+    margin: 5px 0;
+    font-size: 0.9rem;
+}

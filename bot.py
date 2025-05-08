@@ -2403,13 +2403,15 @@ def process_ticket_reply_admin(message, ticket_id):
 
 # Notificar usuário sobre uma resposta a um ticket
 def notify_user_about_ticket_reply(ticket_id, user_id, text):
-    # Notificar usuário
-    user_msg = (
+    # Preparamos duas mensagens se o texto for muito longo
+    # Primeira mensagem com uma introdução
+    intro_msg = (
         f"🔔 *Nova Resposta do Suporte* 🔔\n\n"
         f"*Ticket #*: {ticket_id}\n\n"
-        f"*Mensagem*:\n{text[:300]}{'...' if len(text) > 300 else ''}"
+        f"*Mensagem do Suporte:*"
     )
     
+    # Configurar o teclado inline para as ações
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     keyboard.add(
         types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
@@ -2417,14 +2419,33 @@ def notify_user_about_ticket_reply(ticket_id, user_id, text):
     )
     
     try:
+        # Primeiro enviamos a introdução
         bot.send_message(
             user_id,
-            user_msg,
+            intro_msg,
+            parse_mode="Markdown"
+        )
+        
+        # Em seguida, enviamos o texto completo da mensagem
+        # Sem parse_mode para evitar erros de formatação Markdown no conteúdo
+        bot.send_message(
+            user_id,
+            text
+        )
+        
+        # Por fim, enviamos os botões de ação
+        bot.send_message(
+            user_id,
+            "🔹 *O que deseja fazer?* 🔹",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+        
+        logger.info(f"Notificação de resposta enviada para o usuário {user_id} - Ticket #{ticket_id}")
+        return True
     except Exception as e:
         logger.error(f"Erro ao notificar usuário sobre resposta em ticket: {e}")
+        return False
 
 # Handler para fechar um ticket (usuário)
 @bot.callback_query_handler(func=lambda call: call.data.startswith("close_ticket_"))

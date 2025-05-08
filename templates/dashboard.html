@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Animate.css para animações -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -109,6 +111,35 @@
                 
                 <!-- Status cards -->
                 <div class="row">
+                    <!-- Support Ticket Card - Moved to first position for greater visibility -->
+                    <div class="col-md-6 col-xl-3 mb-4">
+                        <div class="card border-left-danger shadow h-100 py-2 support-card">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col-auto">
+                                        <i class="fas fa-headset fa-2x text-danger"></i>
+                                    </div>
+                                    <div class="col ml-3">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            Tickets não lidos
+                                        </div>
+                                        <div class="h5 mb-0 font-weight-bold">
+                                            {{ stats.unread_tickets }}
+                                            {% if stats.unread_tickets > 0 %}
+                                              <span class="badge bg-danger ms-2 animate__animated animate__pulse animate__infinite">Novo</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-danger bg-opacity-10">
+                                <a href="{{ url_for('support_dashboard') }}" class="text-danger text-decoration-none">
+                                    <small>Ver tickets <i class="fas fa-arrow-right ms-1"></i></small>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="col-md-6 col-xl-3 mb-4">
                         <div class="card border-left-primary shadow h-100 py-2">
                             <div class="card-body">
@@ -198,33 +229,17 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- Support Ticket Card -->
-                    <div class="col-md-6 col-xl-3 mb-4">
-                        <div class="card border-left-danger shadow h-100 py-2">
-                            <div class="card-body">
-                                <div class="row no-gutters align-items-center">
-                                    <div class="col-auto">
-                                        <i class="fas fa-headset fa-2x text-danger"></i>
-                                    </div>
-                                    <div class="col ml-3">
-                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                            Tickets não lidos
-                                        </div>
-                                        <div class="h5 mb-0 font-weight-bold">{{ stats.unread_tickets }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="card-footer bg-danger bg-opacity-10">
-                                <a href="{{ url_for('support_dashboard') }}" class="text-danger text-decoration-none">
-                                    <small>Ver tickets <i class="fas fa-arrow-right ms-1"></i></small>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
                 </div>
                 
                 <!-- Alerts -->
+                {% if stats.unread_tickets > 0 %}
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    <strong><i class="fas fa-headset me-2"></i> Atenção!</strong> Existem {{ stats.unread_tickets }} ticket(s) de suporte não lido(s).
+                    <a href="{{ url_for('support_dashboard') }}" class="alert-link">Verificar agora</a>.
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endif %}
+                
                 {% if stats.pending_approvals > 0 %}
                 <div class="alert alert-warning alert-dismissible fade show" role="alert">
                     <strong><i class="fas fa-exclamation-triangle me-2"></i> Atenção!</strong> Existem {{ stats.pending_approvals }} pagamentos aguardando sua aprovação.

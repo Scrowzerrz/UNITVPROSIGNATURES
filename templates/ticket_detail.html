@@ -93,6 +93,17 @@
                                 </div>
                                 <div class="message-text">{{ message.text|replace('\n', '<br>')|safe }}</div>
                                 <div class="message-time">{{ message.timestamp|replace("T", " ")|truncate(16, true, "") }}</div>
+                                {% if message.from_type == 'admin' %}
+                                <div class="message-footer text-end">
+                                    <small class="text-muted">
+                                        {% if message.read %}
+                                            <i class="fas fa-check-double" title="Lida pelo usuário"></i> Lida
+                                        {% else %}
+                                            <i class="fas fa-check" title="Enviada, aguardando leitura"></i> Enviada
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}
