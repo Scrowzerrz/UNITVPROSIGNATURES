@@ -2978,8 +2978,17 @@ def support_callback(call):
     
     bot.answer_callback_query(call.id)
     
-    # Verificar se o usuário já tem tickets abertos
+    # Verificar se o usuário já tem tickets (ativos e fechados)
     active_tickets = get_user_active_tickets(user_id)
+    
+    # Obter tickets fechados - adicionando funcionalidade para ver tickets antigos
+    from support import read_json_file
+    tickets_file = "data/tickets.json"
+    tickets = read_json_file(tickets_file) or {}
+    
+    # Contar tickets fechados do usuário
+    closed_tickets = [t for tid, t in tickets.items() 
+                      if str(t.get('user_id')) == str(user_id) and t.get('status') == 'closed']
     
     # Texto de suporte
     support_msg = (
@@ -2987,17 +2996,23 @@ def support_callback(call):
     )
     
     if active_tickets:
-        support_msg += f"Você possui {len(active_tickets)} ticket(s) de suporte ativo(s).\n\n"
+        support_msg += f"Você possui {len(active_tickets)} ticket(s) ativo(s).\n"
     
-    support_msg += "Selecione uma opção:"
+    if closed_tickets:
+        support_msg += f"Você tem {len(closed_tickets)} ticket(s) fechado(s).\n"
+    
+    support_msg += "\nSelecione uma opção:"
     
     # Teclado com opções
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     
-    # Se tiver tickets ativos, mostrar botão para visualizá-los
-    if active_tickets:
+    # Se tiver qualquer ticket (ativo ou fechado), mostrar botão para visualizá-los
+    if active_tickets or closed_tickets:
         keyboard.add(
-            types.InlineKeyboardButton(f"🎫 Meus Tickets ({len(active_tickets)})", callback_data="view_my_tickets")
+            types.InlineKeyboardButton(
+                f"🎫 Meus Tickets ({len(active_tickets) + len(closed_tickets)})", 
+                callback_data="view_my_tickets"
+            )
         )
     
     keyboard.add(
@@ -3213,7 +3228,7 @@ def process_new_ticket_message(message):
         )
 
 
-# Ver tickets ativos do usuário
+# Ver tickets do usuário (ativos e fechados)
 @bot.callback_query_handler(func=lambda call: call.data == "view_my_tickets")
 def view_my_tickets_callback(call):
     user_id = call.from_user.id
@@ -3223,44 +3238,86 @@ def view_my_tickets_callback(call):
     # Obter tickets ativos do usuário
     active_tickets = get_user_active_tickets(user_id)
     
-    if not active_tickets:
-        # Usuário não tem tickets ativos
-        bot.edit_message_text(
-            "🎫 *Meus Tickets* 🎫\n\n"
-            "Você não possui tickets de suporte ativos no momento.",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode="Markdown",
-            reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
-                types.InlineKeyboardButton("➕ Abrir Novo Ticket", callback_data="support_new_ticket"),
-                types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+    # Obter tickets fechados - para mostrar histórico completo
+    from support import read_json_file
+    tickets_file = "data/tickets.json"
+    tickets_dict = read_json_file(tickets_file) or {}
+    
+    # Filtrar tickets fechados do usuário
+    closed_tickets = []
+    for ticket_id, ticket in tickets_dict.items():
+        if str(ticket.get('user_id')) == str(user_id) and ticket.get('status') == 'closed':
+            ticket['id'] = ticket_id  # Adicionar ID ao dicionário
+            closed_tickets.append(ticket)
+    
+    # Verificar se usuário tem tickets (ativos ou fechados)
+    if not active_tickets and not closed_tickets:
+        # Usuário não tem nenhum ticket
+        try:
+            bot.edit_message_text(
+                "🎫 *Meus Tickets* 🎫\n\n"
+                "Você não possui nenhum ticket de suporte no momento.",
+                call.message.chat.id,
+                call.message.message_id,
+                parse_mode="Markdown",
+                reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
+                    types.InlineKeyboardButton("➕ Abrir Novo Ticket", callback_data="support_new_ticket"),
+                    types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Erro ao editar mensagem de tickets vazios: {e}")
+            # Fallback para mensagem nova
+            bot.send_message(
+                call.message.chat.id,
+                "🎫 *Meus Tickets* 🎫\n\n"
+                "Você não possui nenhum ticket de suporte no momento.",
+                parse_mode="Markdown",
+                reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
+                    types.InlineKeyboardButton("➕ Abrir Novo Ticket", callback_data="support_new_ticket"),
+                    types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
+                )
+            )
         return
     
-    # Usuário tem tickets ativos
-    tickets_msg = f"🎫 *Meus Tickets ({len(active_tickets)})* 🎫\n\n"
+    # Usuário tem tickets (ativos ou fechados)
+    all_tickets = active_tickets + closed_tickets
+    all_tickets.sort(key=lambda t: t.get('updated_at', ''), reverse=True)  # Ordenar por data, mais recentes primeiro
+    
+    tickets_msg = f"🎫 *Meus Tickets ({len(all_tickets)})* 🎫\n\n"
+    if active_tickets:
+        tickets_msg += f"✅ *{len(active_tickets)}* tickets ativos\n"
+    if closed_tickets:
+        tickets_msg += f"🔒 *{len(closed_tickets)}* tickets fechados\n"
+    
+    tickets_msg += "\nSelecione um ticket para visualizar detalhes:"
     
     # Criar teclado com botões para cada ticket
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     
-    for ticket in active_tickets:
+    # Adicionar tickets ativos primeiro
+    for ticket in all_tickets:
         ticket_id = ticket['id']
         
         # Obter a primeira mensagem como resumo
         first_msg = ticket['messages'][0]['text']
-        summary = first_msg[:30] + "..." if len(first_msg) > 30 else first_msg
+        summary = first_msg[:25] + "..." if len(first_msg) > 25 else first_msg
         
-        # Contar mensagens não lidas pelo usuário
+        # Determinar status
+        is_closed = ticket.get('status') == 'closed'
+        status_emoji = "🔒" if is_closed else "✅"
+        
+        # Contar mensagens não lidas pelo usuário (apenas em tickets ativos)
         unread_count = 0
-        for msg in ticket['messages']:
-            if msg['from_type'] == 'admin' and not msg.get('read', False):
-                unread_count += 1
+        if not is_closed:
+            for msg in ticket['messages']:
+                if msg['from_type'] == 'admin' and not msg.get('read_by_user', False):
+                    unread_count += 1
         
         # Adicionar status de não lido se houver mensagens não lidas
-        ticket_label = f"#{ticket_id} - {summary}"
+        ticket_label = f"{status_emoji} #{ticket_id} - {summary}"
         if unread_count > 0:
-            ticket_label = f"📩 {ticket_label} ({unread_count} não lida{'s' if unread_count > 1 else ''})"
+            ticket_label = f"📩 #{ticket_id} - {summary} ({unread_count} não lida{'s' if unread_count > 1 else ''})"
         
         keyboard.add(
             types.InlineKeyboardButton(ticket_label, callback_data=f"view_ticket_{ticket_id}")
@@ -3272,13 +3329,23 @@ def view_my_tickets_callback(call):
         types.InlineKeyboardButton("🔙 Voltar", callback_data="support")
     )
     
-    bot.edit_message_text(
-        tickets_msg,
-        call.message.chat.id,
-        call.message.message_id,
-        parse_mode="Markdown",
-        reply_markup=keyboard
-    )
+    try:
+        bot.edit_message_text(
+            tickets_msg,
+            call.message.chat.id,
+            call.message.message_id,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+    except Exception as e:
+        logger.error(f"Erro ao editar mensagem de tickets: {e}")
+        # Fallback: enviar nova mensagem
+        bot.send_message(
+            call.message.chat.id,
+            tickets_msg,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
 
 
 # Ver detalhes de um ticket específico
