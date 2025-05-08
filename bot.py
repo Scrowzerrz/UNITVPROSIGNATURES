@@ -453,17 +453,45 @@ def my_account(call):
         start_command(call.message)
         return
     
-    plan_type = user.get('plan_type')
-    expiration_date = datetime.fromisoformat(user.get('plan_expiration'))
-    days_left = (expiration_date - datetime.now()).days
+    # Obter todos os planos ativos do usuário
+    active_plans = get_user_plans(user_id)
     
-    account_msg = (
-        f"📊 *Informações da Conta* 📊\n\n"
-        f"*Plano Atual:* {PLANS[plan_type]['name']}\n"
-        f"*Dias Restantes:* {days_left}\n"
-        f"*Expira em:* {expiration_date.strftime('%d/%m/%Y')}\n\n"
-        f"*Login:* `{user.get('login_info')}`\n\n"
-    )
+    if not active_plans:
+        bot.answer_callback_query(call.id, "Você não possui um plano ativo.")
+        start_command(call.message)
+        return
+    
+    account_msg = f"📊 *Informações da Conta* 📊\n\n"
+    
+    # Mostrar informações de cada plano ativo
+    if len(active_plans) == 1:
+        # Se tiver apenas um plano, mostrar no formato tradicional
+        plan = active_plans[0]
+        plan_type = plan.get('plan_type')
+        expiration_date = datetime.fromisoformat(plan.get('expiration_date'))
+        days_left = max(0, (expiration_date - datetime.now()).days)
+        
+        account_msg += (
+            f"*Plano Atual:* {PLANS[plan_type]['name']}\n"
+            f"*Dias Restantes:* {days_left}\n"
+            f"*Expira em:* {expiration_date.strftime('%d/%m/%Y')}\n\n"
+            f"*Login:* `{plan.get('login_info')}`\n\n"
+        )
+    else:
+        # Se tiver múltiplos planos, mostrar uma lista
+        account_msg += f"*Você possui {len(active_plans)} planos ativos:*\n\n"
+        
+        for i, plan in enumerate(active_plans):
+            plan_type = plan.get('plan_type')
+            expiration_date = datetime.fromisoformat(plan.get('expiration_date'))
+            days_left = max(0, (expiration_date - datetime.now()).days)
+            
+            account_msg += (
+                f"*Plano {i+1}:* {PLANS[plan_type]['name']}\n"
+                f"*Dias Restantes:* {days_left}\n"
+                f"*Expira em:* {expiration_date.strftime('%d/%m/%Y')}\n"
+                f"*Login:* `{plan.get('login_info')}`\n\n"
+            )
     
     # Add referral information
     account_msg += (
@@ -476,7 +504,7 @@ def my_account(call):
     keyboard = types.InlineKeyboardMarkup(row_width=2)
     keyboard.add(
         types.InlineKeyboardButton("🔙 Voltar", callback_data="start"),
-        types.InlineKeyboardButton("🔄 Renovar", callback_data="show_plans"),
+        types.InlineKeyboardButton("🔄 Adquirir Novo Plano", callback_data="show_plans"),
         types.InlineKeyboardButton("💬 Suporte", callback_data="support")
     )
     
