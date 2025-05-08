@@ -1567,6 +1567,7 @@ def create_giveaway(admin_id, plan_type, winners_count, duration_hours, max_part
             'winners': [],
             'status': 'active',  # active, completed, cancelled
             'confirmation_requests': {},  # Solicitações de confirmação para os ganhadores
+            'notified_users': False  # Flag para controlar se os usuários já foram notificados
         }
         
         # Adicionar sorteio à lista de ativos
@@ -1631,6 +1632,59 @@ def add_participant_to_giveaway(giveaway_id, user_id, username, first_name):
     except Exception as e:
         logger.error(f"Error adding participant to giveaway: {e}")
         return False, 0, 0
+
+def notify_users_about_giveaway(giveaway_id):
+    """
+    Notifica todos os usuários ativos sobre um novo sorteio
+    
+    Args:
+        giveaway_id (str): ID do sorteio
+        
+    Returns:
+        tuple: (bool, list, dict) - Sucesso da operação, lista de usuários notificados e dados do sorteio
+    """
+    try:
+        # Obter informações do sorteio
+        giveaway = get_giveaway(giveaway_id)
+        if not giveaway or giveaway['status'] != 'active':
+            return False, [], None
+        
+        # Verificar se os usuários já foram notificados
+        if giveaway.get('notified_users', False):
+            return True, [], None
+        
+        # Obter todos os usuários
+        users = read_json_file(USERS_FILE)
+        if not users:
+            return False, [], None
+        
+        # Contagem de usuários notificados
+        notified_users = []
+        
+        # Marcar como notificado para evitar duplicação
+        giveaways = read_json_file(GIVEAWAYS_FILE)
+        giveaways['active'][giveaway_id]['notified_users'] = True
+        write_json_file(GIVEAWAYS_FILE, giveaways)
+        
+        # Dados do sorteio para retornar
+        giveaway_data = {
+            'id': giveaway_id,
+            'plan_name': giveaway['plan_name'],
+            'duration_hours': giveaway['duration_hours'],
+            'winners_count': giveaway['winners_count'],
+            'max_participants': giveaway['max_participants'],
+            'ends_at': giveaway['ends_at'],
+            'description': giveaway.get('description', '')
+        }
+        
+        # Lista de IDs de usuários para notificar
+        for user_id, user_data in users.items():
+            notified_users.append(user_id)
+        
+        return True, notified_users, giveaway_data
+    except Exception as e:
+        logger.error(f"Error notifying users about giveaway: {e}")
+        return False, [], None
 
 def get_active_giveaways():
     """
