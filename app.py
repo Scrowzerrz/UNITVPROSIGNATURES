@@ -15,7 +15,8 @@ from utils import (
     resume_sales, suspend_sales, sales_enabled, format_currency, create_auth_token, verify_auth_token,
     is_admin_telegram_id, is_allowed_telegram_id, create_session, get_session, delete_session,
     generate_access_code, verify_access_code, list_active_access_codes, is_root_admin,
-    get_active_seasonal_discounts, add_seasonal_discount, remove_seasonal_discount
+    get_active_seasonal_discounts, add_seasonal_discount, remove_seasonal_discount,
+    create_giveaway, get_giveaway, get_giveaways_for_admin, draw_giveaway_winners, cancel_giveaway
 )
 
 # Configure logging
