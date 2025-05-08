@@ -6,9 +6,13 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, abort
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from support import (
+    get_all_active_tickets, get_ticket, add_message_to_ticket, 
+    close_ticket, mark_ticket_messages_as_read
+)
 from config import (
     USERS_FILE, PAYMENTS_FILE, LOGINS_FILE, BOT_CONFIG_FILE, AUTH_FILE, SESSION_FILE,
-    PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
+    TICKETS_FILE, PLANS, ADMIN_ID, SESSION_EXPIRY_HOURS
 )
 from utils import (
     read_json_file, write_json_file, add_login, add_coupon, delete_coupon,
@@ -1318,6 +1322,100 @@ def page_not_found(e):
 @app.errorhandler(500)
 def internal_server_error(e):
     return render_template('index.html', error="Internal server error"), 500
+
+# Support tickets dashboard
+@app.route('/support')
+@login_required
+def support_dashboard():
+    try:
+        # Obter todos os tickets ativos
+        active_tickets = get_all_active_tickets()
+        
+        # Converter para lista e ordenar por data de atualização (mais recentes primeiro)
+        tickets_list = [ticket for _, ticket in active_tickets.items()]
+        tickets_list.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
+        
+        # Obter informações do usuário atual
+        telegram_id = session.get('telegram_id')
+        
+        return render_template('support.html', 
+                              tickets=tickets_list, 
+                              admin_id=telegram_id)
+    except Exception as e:
+        logger.error(f"Error loading support dashboard: {e}")
+        flash('Erro ao carregar o painel de suporte. Tente novamente.', 'danger')
+        return redirect(url_for('dashboard'))
+
+# View ticket details
+@app.route('/support/ticket/<ticket_id>')
+@login_required
+def view_ticket(ticket_id):
+    try:
+        # Obter o ticket
+        ticket = get_ticket(ticket_id)
+        
+        if not ticket:
+            flash('Ticket não encontrado.', 'warning')
+            return redirect(url_for('support_dashboard'))
+        
+        # Marcar mensagens como lidas pelo admin
+        telegram_id = session.get('telegram_id')
+        mark_ticket_messages_as_read(ticket_id, 'admin')
+        
+        return render_template('ticket_detail.html', 
+                              ticket=ticket,
+                              admin_id=telegram_id)
+    except Exception as e:
+        logger.error(f"Error viewing ticket: {e}")
+        flash('Erro ao visualizar o ticket. Tente novamente.', 'danger')
+        return redirect(url_for('support_dashboard'))
+
+# Reply to ticket
+@app.route('/support/ticket/<ticket_id>/reply', methods=['POST'])
+@login_required
+def reply_to_ticket(ticket_id):
+    try:
+        # Obter a resposta
+        reply_text = request.form.get('reply_text')
+        
+        if not reply_text:
+            flash('A resposta não pode estar vazia.', 'warning')
+            return redirect(url_for('view_ticket', ticket_id=ticket_id))
+        
+        # Adicionar a resposta ao ticket
+        telegram_id = session.get('telegram_id')
+        success = add_message_to_ticket(ticket_id, telegram_id, 'admin', reply_text)
+        
+        if success:
+            flash('Resposta enviada com sucesso.', 'success')
+        else:
+            flash('Erro ao enviar resposta. Tente novamente.', 'danger')
+        
+        return redirect(url_for('view_ticket', ticket_id=ticket_id))
+    except Exception as e:
+        logger.error(f"Error replying to ticket: {e}")
+        flash('Erro ao responder ao ticket. Tente novamente.', 'danger')
+        return redirect(url_for('view_ticket', ticket_id=ticket_id))
+
+# Close ticket
+@app.route('/support/ticket/<ticket_id>/close', methods=['POST'])
+@login_required
+def close_support_ticket(ticket_id):
+    try:
+        # Fechar o ticket
+        telegram_id = session.get('telegram_id')
+        success = close_ticket(ticket_id, 'admin')
+        
+        if success:
+            flash('Ticket fechado com sucesso.', 'success')
+        else:
+            flash('Erro ao fechar o ticket. Tente novamente.', 'danger')
+        
+        return redirect(url_for('support_dashboard'))
+    except Exception as e:
+        logger.error(f"Error closing ticket: {e}")
+        flash('Erro ao fechar o ticket. Tente novamente.', 'danger')
+        return redirect(url_for('view_ticket', ticket_id=ticket_id))
 
 # Initialize the app
 if __name__ == '__main__':
