@@ -1544,15 +1544,24 @@ def reply_to_ticket(ticket_id):
                 
                 # Notificar o usuário via Telegram
                 user_id = ticket['user_id']
-                # Adicionar informação se o ticket será fechado
-                message_text = reply_text
-                if close_after_reply:
-                    message_text += "\n\n⚠️ *Este ticket foi fechado pelo administrador.*\n\nVocê pode criar um novo ticket se precisar de mais assistência."
                 
-                # Enviar notificação ao usuário
-                notify_user_about_ticket_reply(ticket_id, user_id, message_text)
-                logger.info(f"Usuário {user_id} notificado sobre resposta ao ticket {ticket_id}")
-                flash('Resposta enviada com sucesso e usuário notificado via Telegram.', 'success')
+                # Enviar notificação com status do ticket após resposta
+                ticket_status = 'closed' if close_after_reply else 'open'
+                
+                # Enviar notificação ao usuário com o status apropriado
+                success_notification = notify_user_about_ticket_reply(
+                    ticket_id=ticket_id, 
+                    user_id=user_id, 
+                    text=reply_text,
+                    ticket_status=ticket_status
+                )
+                
+                if success_notification:
+                    logger.info(f"Usuário {user_id} notificado sobre resposta ao ticket {ticket_id}")
+                    flash('Resposta enviada com sucesso e usuário notificado via Telegram.', 'success')
+                else:
+                    # A função já registra o erro internamente
+                    flash('Resposta enviada com sucesso, mas pode ter ocorrido um problema ao notificar o usuário.', 'warning')
             except Exception as notification_error:
                 logger.error(f"Erro ao notificar usuário via Telegram: {notification_error}")
                 flash('Resposta enviada com sucesso, mas ocorreu um erro ao notificar o usuário via Telegram.', 'warning')
@@ -1586,12 +1595,44 @@ def reply_to_ticket(ticket_id):
 @login_required
 def close_support_ticket(ticket_id):
     try:
+        # Obter informações do ticket antes de fechá-lo
+        ticket = get_ticket(ticket_id)
+        if not ticket:
+            flash('Ticket não encontrado.', 'danger')
+            return redirect(url_for('support_dashboard'))
+            
         # Fechar o ticket
         telegram_id = session.get('telegram_id')
         success = close_ticket(ticket_id, 'admin')
         
         if success:
             flash('Ticket fechado com sucesso.', 'success')
+            
+            # Notificar o usuário sobre o fechamento do ticket
+            try:
+                # Importar função para notificar o usuário
+                from bot import notify_user_about_ticket_reply
+                
+                # Preparar mensagem de fechamento
+                user_id = ticket['user_id']
+                close_message = (
+                    "Este ticket foi fechado por um administrador.\n\n"
+                    "Se você tiver outras dúvidas ou precisar de assistência adicional, "
+                    "você pode abrir um novo ticket a qualquer momento através do menu de suporte."
+                )
+                
+                # Enviar notificação ao usuário com status closed
+                notify_user_about_ticket_reply(
+                    ticket_id=ticket_id,
+                    user_id=user_id,
+                    text=close_message,
+                    ticket_status='closed'
+                )
+                
+                logger.info(f"Usuário {user_id} notificado sobre fechamento do ticket {ticket_id}")
+            except Exception as notification_error:
+                logger.error(f"Erro ao notificar usuário sobre fechamento do ticket: {notification_error}")
+                # Não retornamos erro ao admin, pois o ticket foi fechado com sucesso
         else:
             flash('Erro ao fechar o ticket. Tente novamente.', 'danger')
         
@@ -1606,12 +1647,46 @@ def close_support_ticket(ticket_id):
 @login_required
 def reopen_ticket(ticket_id):
     try:
+        # Obter informações do ticket antes de reabri-lo
+        ticket = get_ticket(ticket_id)
+        if not ticket:
+            flash('Ticket não encontrado.', 'danger')
+            return redirect(url_for('support_dashboard'))
+            
+        # Armazenar o ID do usuário antes de reabrir (para notificação)
+        user_id = ticket['user_id']
+        
         # Reabrir o ticket
         from support import reopen_ticket as support_reopen_ticket
         success = support_reopen_ticket(ticket_id)
         
         if success:
             flash('Ticket reaberto com sucesso.', 'success')
+            
+            # Notificar o usuário sobre a reabertura do ticket
+            try:
+                # Importar função para notificar o usuário
+                from bot import notify_user_about_ticket_reply
+                
+                # Preparar mensagem de reabertura
+                reopen_message = (
+                    "Este ticket foi reaberto por um administrador.\n\n"
+                    "Nossa equipe de suporte continuará a atender sua solicitação. "
+                    "Você receberá uma notificação quando houver uma nova resposta."
+                )
+                
+                # Enviar notificação ao usuário com status open
+                notify_user_about_ticket_reply(
+                    ticket_id=ticket_id,
+                    user_id=user_id,
+                    text=reopen_message,
+                    ticket_status='open'
+                )
+                
+                logger.info(f"Usuário {user_id} notificado sobre reabertura do ticket {ticket_id}")
+            except Exception as notification_error:
+                logger.error(f"Erro ao notificar usuário sobre reabertura do ticket: {notification_error}")
+                # Não retornamos erro ao admin, pois o ticket foi reaberto com sucesso
         else:
             flash('Erro ao reabrir o ticket. Tente novamente.', 'danger')
         

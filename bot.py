@@ -2402,46 +2402,103 @@ def process_ticket_reply_admin(message, ticket_id):
         )
 
 # Notificar usuário sobre uma resposta a um ticket
-def notify_user_about_ticket_reply(ticket_id, user_id, text):
-    # Preparamos duas mensagens se o texto for muito longo
-    # Primeira mensagem com uma introdução
-    intro_msg = (
-        f"🔔 *Nova Resposta do Suporte* 🔔\n\n"
-        f"*Ticket #*: {ticket_id}\n\n"
-        f"*Mensagem do Suporte:*"
-    )
+def notify_user_about_ticket_reply(ticket_id, user_id, text, ticket_status=None):
+    """
+    Envia uma notificação ao usuário sobre uma nova resposta em seu ticket de suporte.
     
-    # Configurar o teclado inline para as ações
-    keyboard = types.InlineKeyboardMarkup(row_width=1)
-    keyboard.add(
-        types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
-        types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_user_{ticket_id}")
-    )
+    Args:
+        ticket_id (str): ID do ticket
+        user_id (str): ID do usuário no Telegram
+        text (str): Texto da resposta
+        ticket_status (str, optional): Status atual do ticket (aberto ou fechado)
     
+    Returns:
+        bool: True se a notificação foi enviada com sucesso, False caso contrário
+    """
     try:
-        # Primeiro enviamos a introdução
-        bot.send_message(
-            user_id,
-            intro_msg,
-            parse_mode="Markdown"
+        # Obter informações do ticket para contexto
+        from support import get_ticket
+        ticket = get_ticket(ticket_id)
+        is_closed = ticket_status == 'closed' or (ticket and ticket.get('status') == 'closed')
+        
+        # Tratamento especial para mensagens muito longas
+        if len(text) > 3000:
+            # Truncar mensagem para evitar erros no Telegram
+            text_to_send = text[:3000] + "...\n\n[Mensagem truncada devido ao tamanho]"
+        else:
+            text_to_send = text
+            
+        # Personalizar mensagem com base no status do ticket
+        status_text = ""
+        if is_closed:
+            status_text = "\n\n⚠️ *TICKET FECHADO* ⚠️\n_Este ticket foi fechado pelo administrador._"
+            # Adicionar botão para abrir novo ticket se este estiver fechado
+            action_buttons = [
+                types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+                types.InlineKeyboardButton("📝 Novo Ticket", callback_data="support_new_ticket"),
+                types.InlineKeyboardButton("🔓 Reabrir Ticket", callback_data=f"reopen_ticket_user_{ticket_id}")
+            ]
+        else:
+            # Adicionar botões de ação padrão para tickets abertos
+            action_buttons = [
+                types.InlineKeyboardButton("📋 Ver Ticket", callback_data=f"view_ticket_{ticket_id}"),
+                types.InlineKeyboardButton("💬 Responder", callback_data=f"reply_ticket_user_{ticket_id}"),
+                types.InlineKeyboardButton("🔒 Fechar Ticket", callback_data=f"close_ticket_user_{ticket_id}")
+            ]
+            
+        # Configurar o teclado inline para as ações
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        for button in action_buttons:
+            keyboard.add(button)
+        
+        # Adicionar botão de retorno ao menu principal
+        keyboard.add(types.InlineKeyboardButton("🏠 Menu Principal", callback_data="start"))
+        
+        # Criar cabeçalho formatado com informações do ticket
+        header = (
+            f"🔔 *Nova Resposta do Suporte* 🔔{status_text}\n\n"
+            f"*Ticket #*: {ticket_id}\n"
+            f"*Data*: {datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n"
+            f"*Mensagem do Suporte:*\n"
+            f"```\n{text_to_send}\n```"
         )
         
-        # Em seguida, enviamos o texto completo da mensagem
-        # Sem parse_mode para evitar erros de formatação Markdown no conteúdo
-        bot.send_message(
+        # Enviar uma única mensagem com cabeçalho, conteúdo e botões
+        # Utilizamos parse_mode Markdown para formatação correta
+        message = bot.send_message(
             user_id,
-            text
-        )
-        
-        # Por fim, enviamos os botões de ação
-        bot.send_message(
-            user_id,
-            "🔹 *O que deseja fazer?* 🔹",
+            header,
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
         
+        # Se a mensagem for muito longa e foi truncada, enviar o restante
+        if len(text) > 3000:
+            # Enviar mensagem de continuação
+            bot.send_message(
+                user_id,
+                "⬇️ *Continuação da mensagem* ⬇️",
+                parse_mode="Markdown"
+            )
+            # Enviar o texto completo sem formatação
+            bot.send_message(
+                user_id,
+                text
+            )
+        
         logger.info(f"Notificação de resposta enviada para o usuário {user_id} - Ticket #{ticket_id}")
+        
+        # Marcar mensagem como enviada no ticket
+        try:
+            # Atualizar o registro da mensagem para indicar que foi enviada
+            if ticket:
+                for msg in ticket.get('messages', []):
+                    if msg.get('from_type') == 'admin' and not msg.get('notification_sent'):
+                        # Atualizar status da notificação em uma função futura
+                        pass
+        except Exception as update_error:
+            logger.warning(f"Erro ao atualizar status de notificação do ticket: {update_error}")
+        
         return True
     except Exception as e:
         logger.error(f"Erro ao notificar usuário sobre resposta em ticket: {e}")
