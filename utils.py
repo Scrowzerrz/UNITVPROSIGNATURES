@@ -1167,12 +1167,13 @@ def mark_expiration_notified(user_id, plan_id=None):
         else:
             # Formato antigo - atualizar campo a nível de usuário
             user['expiration_notified'] = True
-            
-        # Salvar alterações
+        
+        # Salvar as alterações
         save_user(user_id, user)
         return True
+        
     except Exception as e:
-        logger.error(f"Error marking expiration notification for user {user_id}: {e}")
+        logger.error(f"Error in mark_expiration_notified: {e}")
         return False
 
 # Format currency values
