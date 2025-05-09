@@ -285,7 +285,18 @@ def get_all_active_tickets():
     """
     try:
         tickets = read_json_file(TICKETS_FILE)
-        return tickets['active']
+        
+        # Verifica se a estrutura de tickets ativos existe e a inicializa se necessário
+        if not tickets:
+            tickets = {'active': {}, 'closed': {}, 'current_id': 0}
+            write_json_file(TICKETS_FILE, tickets)
+            
+        # Garantir que a chave 'active' existe
+        if 'active' not in tickets:
+            tickets['active'] = {}
+            write_json_file(TICKETS_FILE, tickets)
+            
+        return tickets.get('active', {})
     except Exception as e:
         logger.error(f"Error getting active tickets: {e}")
         return {}
@@ -299,6 +310,17 @@ def get_all_closed_tickets():
     """
     try:
         tickets = read_json_file(TICKETS_FILE)
+        
+        # Verifica se a estrutura de tickets fechados existe e a inicializa se necessário
+        if not tickets:
+            tickets = {'active': {}, 'closed': {}, 'current_id': 0}
+            write_json_file(TICKETS_FILE, tickets)
+            
+        # Garantir que a chave 'closed' existe
+        if 'closed' not in tickets:
+            tickets['closed'] = {}
+            write_json_file(TICKETS_FILE, tickets)
+            
         return tickets.get('closed', {})
     except Exception as e:
         logger.error(f"Error getting closed tickets: {e}")

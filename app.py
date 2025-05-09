@@ -1394,14 +1394,16 @@ def support_dashboard():
         filter_type = request.args.get('filter', 'all')
         
         # Contar tickets não lidos para stats
-        for ticket_id, ticket in active_tickets.items():
-            has_unread = False
-            for message in ticket['messages']:
-                if not message['read'] and message['from_type'] == 'user':
-                    has_unread = True
-                    break
-            if has_unread:
-                unread_tickets += 1
+        if active_tickets:
+            for ticket_id, ticket in active_tickets.items():
+                has_unread = False
+                if 'messages' in ticket:
+                    for message in ticket['messages']:
+                        if not message.get('read', False) and message.get('from_type') == 'user':
+                            has_unread = True
+                            break
+                if has_unread:
+                    unread_tickets += 1
         
         # Converter para lista e aplicar filtro
         tickets_list = []
