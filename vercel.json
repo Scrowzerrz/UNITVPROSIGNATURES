@@ -2,17 +2,38 @@
   "version": 2,
   "builds": [
     {
-      "src": "main.py",
+      "src": "api/serverless.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/wsgi.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "static/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/serverless.py"
+    },
+    {
+      "src": "/api/status",
+      "dest": "/api/serverless.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "main.py"
+      "dest": "/api/wsgi.py"
     }
   ],
   "env": {
-    "PYTHONUNBUFFERED": "1"
+    "PYTHONUNBUFFERED": "1",
+    "VERCEL": "1"
   }
 }

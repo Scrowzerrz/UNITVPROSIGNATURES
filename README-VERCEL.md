@@ -117,6 +117,26 @@ Por causa da natureza serverless, o bot Telegram não pode ser executado como um
 
 ## Problemas comuns e soluções
 
+### Erro "This Serverless Function has crashed" (500: INTERNAL_SERVER_ERROR / FUNCTION_INVOCATION_FAILED)
+
+Este erro geralmente indica um problema na inicialização da aplicação. Possíveis causas e soluções:
+
+1. **Variáveis de ambiente ausentes**:
+   - Verifique se você adicionou todas as variáveis de ambiente necessárias no painel do Vercel
+   - Garanta que `SESSION_SECRET` e `TELEGRAM_BOT_TOKEN` estão definidos
+
+2. **Rotas alternativas para diagnóstico**:
+   - Acesse `/api/health` ou `/api/status` para verificar se ao menos o servidor básico está funcionando
+   - Essas rotas usam um handler simplificado que deve funcionar mesmo que o resto da aplicação falhe
+
+3. **Logs detalhados**:
+   - Consulte os logs no painel do Vercel para ver o erro específico
+   - As mensagens de erro do Python geralmente indicam a linha e o arquivo com problema
+
+4. **Uso de arquivo WSGI alternativo**:
+   - Se a aplicação principal não inicializar, edite o `vercel.json` para usar o `api/serverless.py` como rota padrão temporariamente
+   - Isso permitirá que você tenha acesso ao servidor para continuar o diagnóstico
+
 ### Timeout em funções serverless
 
 O Vercel limita a execução de funções serverless a 10 segundos. Se sua aplicação precisar de mais tempo, considere:

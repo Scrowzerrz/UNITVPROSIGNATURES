@@ -6,8 +6,9 @@ Este documento apresenta os passos essenciais para fazer o deploy da aplicação
 
 Os seguintes arquivos já foram criados e configurados:
 
-- `vercel.json` - Configuração principal
-- `api/vercel.py` - Handler serverless
+- `vercel.json` - Configuração principal com múltiplos pontos de entrada
+- `api/serverless.py` - Handler serverless simplificado (funciona em /api/health e /api/status)
+- `api/wsgi.py` - Adaptador WSGI para a aplicação Flask principal
 - `vercel-requirements.txt` - Dependências
 - `.vercelignore` - Arquivos a ignorar
 - `vercel_app_config.py` - Configurações específicas
