@@ -28,6 +28,9 @@ from utils import (
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Verificar se estamos no ambiente Vercel
+is_vercel_env = 'VERCEL' in os.environ
+
 # Adicionar logs detalhados para depuração
 import sys
 import traceback
@@ -1766,6 +1769,16 @@ def reopen_ticket(ticket_id):
         logger.error(f"Error reopening ticket: {e}")
         flash('Erro ao reabrir o ticket. Tente novamente.', 'danger')
         return redirect(url_for('view_ticket', ticket_id=ticket_id))
+
+# Aplicar configurações específicas para o Vercel se necessário
+if is_vercel_env:
+    try:
+        from vercel_app_config import configure_app_for_vercel
+        configure_app_for_vercel(app)
+        logger.info("Aplicação configurada para o ambiente Vercel")
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Erro ao configurar app para Vercel: {e}")
 
 # Initialize the app
 if __name__ == '__main__':
