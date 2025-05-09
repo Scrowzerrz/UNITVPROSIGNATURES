@@ -827,6 +827,9 @@ def payment_settings():
         payments = read_json_file(PAYMENTS_FILE) or {}
         logins = read_json_file(LOGINS_FILE) or {}
         
+        # Import the support module to get unread tickets count
+        from support import get_unread_ticket_count
+        
         # Create stats object for the dashboard template
         stats = {
             'total_users': len(users),
@@ -841,7 +844,8 @@ def payment_settings():
             'pending_approvals': sum(1 for p in payments.values() if p.get('status') == 'pending_approval'),
             'waiting_for_login': sum(1 for p in payments.values() if p.get('status') == 'approved' and not p.get('login_delivered')),
             'sales_status': sales_enabled(),
-            'active_coupons': len(bot_config.get('coupons', {}))
+            'active_coupons': len(bot_config.get('coupons', {})),
+            'unread_tickets': get_unread_ticket_count(session.get('telegram_id'), 'admin')
         }
         
         # Log debug information
@@ -901,6 +905,9 @@ def payment_config():
         payments = read_json_file(PAYMENTS_FILE) or {}
         logins = read_json_file(LOGINS_FILE) or {}
         
+        # Import the support module to get unread tickets count
+        from support import get_unread_ticket_count
+        
         # Create stats object for the dashboard template
         stats = {
             'total_users': len(users),
@@ -915,7 +922,8 @@ def payment_config():
             'pending_approvals': sum(1 for p in payments.values() if p.get('status') == 'pending_approval'),
             'waiting_for_login': sum(1 for p in payments.values() if p.get('status') == 'approved' and not p.get('login_delivered')),
             'sales_status': sales_enabled(),
-            'active_coupons': len(bot_config.get('coupons', {}))
+            'active_coupons': len(bot_config.get('coupons', {})),
+            'unread_tickets': get_unread_ticket_count(session.get('telegram_id'), 'admin')
         }
         
         logger.debug(f"Alternative payment settings loaded successfully")
