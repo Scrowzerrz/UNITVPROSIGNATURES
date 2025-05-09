@@ -132,10 +132,37 @@ O Vercel opera em um ambiente serverless, onde cada função é executada em um 
 
 ### Considerações sobre o Bot Telegram
 
-Por causa da natureza serverless, o bot Telegram não pode ser executado como um processo contínuo no Vercel. Opções:
+Por causa da natureza serverless, o bot Telegram não pode ser executado como um processo contínuo no Vercel. O código já está preparado para desativar o bot automaticamente quando detecta o ambiente Vercel. Para manter o bot funcionando, considere estas opções:
 
-1. **Webhooks:** Configure o bot para usar webhooks ao invés de polling. 
-2. **Serviço separado:** Execute o bot em um serviço separado (como Railway, Render, Fly.io, etc.)
+#### Opção 1: Usar Webhooks (Ideal para baixo volume)
+
+Configure o bot para usar webhooks ao invés de polling:
+
+1. Crie um endpoint específico no Vercel para receber atualizações do Telegram:
+   ```python
+   @app.route('/api/telegram-webhook', methods=['POST'])
+   def telegram_webhook():
+       update = request.get_json()
+       # Processar a atualização aqui
+       return jsonify({'status': 'ok'})
+   ```
+
+2. Configure o webhook no Telegram:
+   ```bash
+   curl -X POST https://api.telegram.org/bot{SEU_TOKEN}/setWebhook?url=https://seu-app.vercel.app/api/telegram-webhook
+   ```
+
+#### Opção 2: Serviço Separado (Recomendado para produção)
+
+Execute o bot em um serviço separado que suporte processos contínuos:
+
+1. Railway (www.railway.app)
+2. Render (www.render.com) 
+3. Fly.io
+4. Heroku
+5. Um VPS simples
+
+Este método é mais confiável porque permite que o bot esteja sempre ativo, independentemente do Vercel.
 
 ## Problemas comuns e soluções
 

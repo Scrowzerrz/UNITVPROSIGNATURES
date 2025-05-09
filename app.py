@@ -28,12 +28,21 @@ from utils import (
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Verificar se estamos no ambiente Vercel
-is_vercel_env = 'VERCEL' in os.environ
-
 # Adicionar logs detalhados para depuração
 import sys
 import traceback
+
+# Verificar se estamos no ambiente Vercel
+is_vercel_env = 'VERCEL' in os.environ
+if is_vercel_env:
+    logger.info("Executando no ambiente Vercel")
+    
+    # Configurações especiais para o ambiente Vercel
+    DISABLE_BOT_THREADS = True
+    logger.info("Threads do bot desativadas no ambiente Vercel")
+else:
+    logger.info("Executando em ambiente local/desenvolvimento")
+    DISABLE_BOT_THREADS = False
 
 def log_exception(e):
     """Log a detailed exception message"""
@@ -43,7 +52,19 @@ def log_exception(e):
 
 # Initialize Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "unitv_secret_key")
+
+# Use a sessão segura, com fallback para uma chave gerada se não for fornecida
+SESSION_SECRET = os.environ.get("SESSION_SECRET")
+if not SESSION_SECRET:
+    logger.warning("SESSION_SECRET não definido! Usando chave temporária para sessão.")
+    SESSION_SECRET = secrets.token_hex(16)
+    
+app.secret_key = SESSION_SECRET
+
+# Configurações adicionais para o Vercel
+if is_vercel_env:
+    app.config['PROPAGATE_EXCEPTIONS'] = True  # Ajuda a ver erros nos logs
+    app.config['DISABLE_BOT_THREADS'] = True   # Flag para desabilitar threads do bot
 
 # Expor as variáveis de configuração para os templates
 app.jinja_env.globals['config'] = {
@@ -1771,6 +1792,65 @@ def reopen_ticket(ticket_id):
         return redirect(url_for('view_ticket', ticket_id=ticket_id))
 
 # Aplicar configurações específicas para o Vercel se necessário
+# Endpoint para webhook do Telegram (para uso no Vercel)
+@app.route('/api/telegram-webhook', methods=['POST'])
+def telegram_webhook():
+    try:
+        # Verificar token para segurança básica
+        token = request.args.get('token')
+        expected_token = os.environ.get('WEBHOOK_TOKEN')
+        
+        if not token or token != expected_token:
+            logger.warning(f"Tentativa de acesso ao webhook com token inválido: {token}")
+            return jsonify({'error': 'Token inválido'}), 401
+        
+        # Obter os dados da requisição
+        if not request.is_json:
+            logger.warning("Requisição webhook sem dados JSON")
+            return jsonify({'error': 'Esperado conteúdo JSON'}), 400
+        
+        update = request.get_json()
+        logger.info(f"Webhook: recebida atualização do Telegram")
+        
+        # Importar módulo do bot para processamento
+        try:
+            from bot import process_telegram_update
+            
+            # Verificar se a função está implementada
+            if not callable(getattr(process_telegram_update, '__call__', None)):
+                logger.error("Função process_telegram_update não implementada ou não chamável")
+                return jsonify({'status': 'error', 'message': 'Handler não implementado'}), 501
+            
+            # Processar a atualização
+            result = process_telegram_update(update)
+            return jsonify({'status': 'ok', 'processed': True, 'result': result})
+            
+        except ImportError:
+            logger.error("Módulo process_telegram_update não encontrado")
+            return jsonify({'status': 'error', 'message': 'Webhook não implementado'}), 501
+            
+    except Exception as e:
+        log_exception(e)
+        logger.error(f"Erro ao processar webhook do Telegram: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Endpoint para verificar se o webhook está configurado
+@app.route('/api/webhook-status', methods=['GET'])
+def webhook_status():
+    try:
+        # Verificar se estamos no Vercel
+        webhook_enabled = is_vercel_env
+        
+        return jsonify({
+            'status': 'ok',
+            'webhook_enabled': webhook_enabled,
+            'environment': 'vercel' if is_vercel_env else 'development',
+            'bot_threads_disabled': app.config.get('DISABLE_BOT_THREADS', False)
+        })
+    except Exception as e:
+        log_exception(e)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 if is_vercel_env:
     try:
         from vercel_app_config import configure_app_for_vercel
