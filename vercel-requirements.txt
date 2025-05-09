@@ -1,0 +1,9 @@
+email-validator==2.1.0
+flask==2.3.3
+flask-sqlalchemy==3.1.1
+gunicorn==21.2.0
+psycopg2-binary==2.9.9
+pytelegrambotapi==4.14.0
+python-telegram-bot==20.7
+requests==2.31.0
+werkzeug==2.3.7
