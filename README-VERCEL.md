@@ -43,7 +43,29 @@ git remote add origin https://github.com/seu-usuario/unitv.git
 git push -u origin main
 ```
 
-### 3. Deploy no Vercel
+### 3. Teste local antes do deploy
+
+Antes de fazer o deploy no Vercel, você pode testar localmente os endpoints serverless:
+
+#### Teste do endpoint serverless básico
+
+1. Execute o script `test_serverless.py`:
+   ```bash
+   python test_serverless.py
+   ```
+
+2. Acesse `http://localhost:8000/api/status` no navegador para verificar a resposta.
+
+#### Teste de todos os handlers
+
+1. Execute o script `test_vercel_local.py`:
+   ```bash
+   python test_vercel_local.py
+   ```
+
+2. Este script testará todos os endpoints configurados e mostrará as respostas.
+
+### 4. Deploy no Vercel
 
 Existem duas maneiras de fazer o deploy no Vercel:
 
