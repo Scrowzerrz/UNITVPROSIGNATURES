@@ -1410,17 +1410,24 @@ def support_dashboard():
         
         # Adicionar tickets ativos se solicitado
         if filter_type in ['all', 'active']:
-            active_list = [ticket for _, ticket in active_tickets.items()]
-            for ticket in active_list:
-                ticket['display_status'] = 'active'
-                tickets_list.append(ticket)
+            if active_tickets:
+                active_list = [ticket for _, ticket in active_tickets.items()]
+                for ticket in active_list:
+                    ticket['display_status'] = 'active'
+                    tickets_list.append(ticket)
                 
         # Adicionar tickets fechados se solicitado
         if filter_type in ['all', 'closed']:
-            closed_list = [ticket for _, ticket in closed_tickets.items()]
-            for ticket in closed_list:
-                ticket['display_status'] = 'closed'
-                tickets_list.append(ticket)
+            if closed_tickets:
+                closed_list = [ticket for _, ticket in closed_tickets.items()]
+                for ticket in closed_list:
+                    ticket['display_status'] = 'closed'
+                    tickets_list.append(ticket)
+                    
+        # Log para debug
+        logger.debug(f"Quantidade de tickets ativos: {len(active_tickets)}")
+        logger.debug(f"Quantidade de tickets fechados: {len(closed_tickets)}")
+        logger.debug(f"Total de tickets: {len(active_tickets) + len(closed_tickets)}")
                 
         # Ordenar por data de atualização (mais recentes primeiro)
         tickets_list.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
