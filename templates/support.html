@@ -126,10 +126,22 @@
                             <i class="fas fa-filter me-1"></i> Filtrar
                         </button>
                         <div class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="filterDropdown">
-                            <a class="dropdown-item filter-item" href="#" data-filter="all">Todos os Tickets</a>
-                            <a class="dropdown-item filter-item" href="#" data-filter="open">Apenas Abertos</a>
-                            <a class="dropdown-item filter-item" href="#" data-filter="unread">Não Lidos</a>
-                            <a class="dropdown-item filter-item" href="#" data-filter="closed">Fechados</a>
+                            <a class="dropdown-item filter-item {% if filter_type == 'all' %}active{% endif %}" 
+                               href="{{ url_for('support_dashboard', filter='all') }}">
+                                Todos os Tickets <span class="badge bg-secondary ms-1">{{ stats.total_tickets }}</span>
+                            </a>
+                            <a class="dropdown-item filter-item {% if filter_type == 'active' %}active{% endif %}" 
+                               href="{{ url_for('support_dashboard', filter='active') }}">
+                                Apenas Ativos <span class="badge bg-success ms-1">{{ stats.active_ticket_count }}</span>
+                            </a>
+                            <a class="dropdown-item filter-item {% if filter_type == 'closed' %}active{% endif %}" 
+                               href="{{ url_for('support_dashboard', filter='closed') }}">
+                                Arquivados <span class="badge bg-secondary ms-1">{{ stats.closed_ticket_count }}</span>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a class="dropdown-item filter-item" href="#" data-filter="unread">
+                                Não Lidos <span class="badge bg-danger ms-1">{{ stats.unread_tickets }}</span>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -156,7 +168,7 @@
                                         {% endif %}
                                     {% endfor %}
                                     
-                                    <tr class="{{ 'table-warning animate__animated animate__fadeIn' if unread_count > 0 else '' }} {{ 'table-light' if ticket.status == 'closed' else '' }}" 
+                                    <tr class="{{ 'table-warning animate__animated animate__fadeIn' if unread_count > 0 else '' }} {{ 'table-light' if ticket.status == 'closed' or ticket.display_status == 'closed' else '' }}" 
                                         data-status="{{ ticket.status }}" 
                                         data-unread="{{ 'yes' if unread_count > 0 else 'no' }}">
                                         <td class="position-relative">
@@ -182,7 +194,7 @@
                                             <div class="small text-muted">ID: {{ ticket.user_id }}</div>
                                         </td>
                                         <td>
-                                            {% if ticket.status == 'open' %}
+                                            {% if ticket.status == 'open' or (ticket.display_status is defined and ticket.display_status == 'open') %}
                                                 <span class="badge bg-success">Aberto</span>
                                             {% else %}
                                                 <span class="badge bg-secondary">Fechado</span>
@@ -223,7 +235,7 @@
                                                 <i class="fas fa-eye me-1"></i>Ver Ticket
                                             </a>
                                             
-                                            {% if ticket.status == 'open' and unread_count > 0 %}
+                                            {% if (ticket.status == 'open' or (ticket.display_status is defined and ticket.display_status == 'open')) and unread_count > 0 %}
                                                 <div class="mt-2">
                                                     <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" class="btn btn-danger btn-sm">
                                                         <i class="fas fa-reply me-1"></i>Responder
