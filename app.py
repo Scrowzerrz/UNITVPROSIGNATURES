@@ -1385,8 +1385,13 @@ def support_dashboard():
         telegram_id = session.get('telegram_id')
         unread_tickets = 0
         
-        # Obter todos os tickets ativos
+        # Obter tickets (ativos e fechados)
+        from support import get_all_closed_tickets
         active_tickets = get_all_active_tickets()
+        closed_tickets = get_all_closed_tickets()
+        
+        # Obter o parâmetro de filtro (todos, ativos ou fechados)
+        filter_type = request.args.get('filter', 'all')
         
         # Contar tickets não lidos para stats
         for ticket_id, ticket in active_tickets.items():
@@ -1398,8 +1403,24 @@ def support_dashboard():
             if has_unread:
                 unread_tickets += 1
         
-        # Converter para lista e ordenar por data de atualização (mais recentes primeiro)
-        tickets_list = [ticket for _, ticket in active_tickets.items()]
+        # Converter para lista e aplicar filtro
+        tickets_list = []
+        
+        # Adicionar tickets ativos se solicitado
+        if filter_type in ['all', 'active']:
+            active_list = [ticket for _, ticket in active_tickets.items()]
+            for ticket in active_list:
+                ticket['display_status'] = 'active'
+                tickets_list.append(ticket)
+                
+        # Adicionar tickets fechados se solicitado
+        if filter_type in ['all', 'closed']:
+            closed_list = [ticket for _, ticket in closed_tickets.items()]
+            for ticket in closed_list:
+                ticket['display_status'] = 'closed'
+                tickets_list.append(ticket)
+                
+        # Ordenar por data de atualização (mais recentes primeiro)
         tickets_list.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
         
         # Construir objeto stats para o template
@@ -1412,13 +1433,18 @@ def support_dashboard():
             'waiting_for_login': waiting_for_login,
             'sales_status': sales_status,
             'active_coupons': active_coupons,
-            'unread_tickets': unread_tickets
+            'unread_tickets': unread_tickets,
+            'total_tickets': len(active_tickets) + len(closed_tickets),
+            'active_ticket_count': len(active_tickets),
+            'closed_ticket_count': len(closed_tickets),
+            'current_filter': filter_type
         }
         
         return render_template('support.html', 
                                tickets=tickets_list, 
                                admin_id=telegram_id,
-                               stats=stats)  # Adicionando stats ao template
+                               stats=stats,
+                               filter_type=filter_type)  # Adicionando stats e filtro ao template
     except Exception as e:
         logger.error(f"Error loading support dashboard: {e}")
         flash('Erro ao carregar o painel de suporte. Tente novamente.', 'danger')

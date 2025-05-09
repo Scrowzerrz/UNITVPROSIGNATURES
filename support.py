@@ -289,6 +289,20 @@ def get_all_active_tickets():
     except Exception as e:
         logger.error(f"Error getting active tickets: {e}")
         return {}
+        
+def get_all_closed_tickets():
+    """
+    Obtém todos os tickets fechados/arquivados.
+    
+    Returns:
+        dict: Dicionário de tickets fechados/arquivados
+    """
+    try:
+        tickets = read_json_file(TICKETS_FILE)
+        return tickets.get('closed', {})
+    except Exception as e:
+        logger.error(f"Error getting closed tickets: {e}")
+        return {}
 
 def mark_ticket_messages_as_read(ticket_id, reader_type):
     """
