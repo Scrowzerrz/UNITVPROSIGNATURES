@@ -1183,9 +1183,37 @@ def giveaways():
         # Obter todos os sorteios para exibição no painel administrativo
         giveaways = get_giveaways_for_admin()
         
+        # Get data for stats (required by layout.html template)
+        users = read_json_file(USERS_FILE) or {}
+        payments = read_json_file(PAYMENTS_FILE) or {}
+        logins = read_json_file(LOGINS_FILE) or {}
+        bot_config = read_json_file(BOT_CONFIG_FILE) or {}
+        
+        # Import the support module to get unread tickets count
+        from support import get_unread_ticket_count
+        
+        # Create stats object for the template
+        stats = {
+            'total_users': len(users),
+            'active_users': sum(1 for user in users.values() if user.get('subscription_end') and 
+                              datetime.fromisoformat(user.get('subscription_end')) > datetime.now()),
+            'pending_payments': sum(1 for p in payments.values() if p.get('status') == 'pending'),
+            'available_logins': {
+                '30_days': len(logins.get('30_days', [])),
+                '6_months': len(logins.get('6_months', [])),
+                '1_year': len(logins.get('1_year', []))
+            },
+            'pending_approvals': sum(1 for p in payments.values() if p.get('status') == 'pending_approval'),
+            'waiting_for_login': sum(1 for p in payments.values() if p.get('status') == 'approved' and not p.get('login_delivered')),
+            'sales_status': sales_enabled(),
+            'active_coupons': len(bot_config.get('coupons', {})),
+            'unread_tickets': get_unread_ticket_count(session.get('telegram_id'), 'admin')
+        }
+        
         return render_template('giveaways.html', 
                               giveaways=giveaways, 
                               plans=PLANS,
+                              stats=stats,
                               message=request.args.get('message'),
                               message_type=request.args.get('message_type', 'info'))
     except Exception as e:
