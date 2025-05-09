@@ -36,28 +36,22 @@ def start_bot():
 # Import the Flask app
 from app import app
 
-# Verifica se estamos no Vercel (ambiente serverless)
-is_vercel_env = 'VERCEL' in os.environ
+# Executar a correção de pagamentos inconsistentes na inicialização
+check_and_fix_inconsistent_payments()
 
-# Executar a correção de pagamentos inconsistentes somente se não estiver no Vercel
-if not is_vercel_env:
-    check_and_fix_inconsistent_payments()
-
-    # Start bot in a background thread somente se não estiver no Vercel
-    if BOT_TOKEN:
-        logger.info("Initializing Telegram bot thread...")
-        bot_thread = threading.Thread(target=start_bot)
-        bot_thread.daemon = True
-        bot_thread.start()
-        logger.info("Telegram bot thread started")
-    else:
-        logger.warning("Telegram bot not started. Set TELEGRAM_BOT_TOKEN environment variable to enable it.")
-
-# Função para ser importada pelo Vercel
-index = app
+# Start bot in a background thread
+if BOT_TOKEN:
+    logger.info("Initializing Telegram bot thread...")
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    logger.info("Telegram bot thread started")
+else:
+    logger.warning("Telegram bot not started. Set TELEGRAM_BOT_TOKEN environment variable to enable it.")
 
 if __name__ == "__main__":
     # O bot já foi inicializado acima, não precisamos iniciar novamente
     # Start flask app
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    from app import app as flask_app
+    flask_app.run(host="0.0.0.0", port=port, debug=True)

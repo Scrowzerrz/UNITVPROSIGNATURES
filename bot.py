@@ -5989,11 +5989,6 @@ _bot_running = False
 def run_bot():
     global _bot_running
     
-    # Verificar se estamos no ambiente Vercel (serverless)
-    if 'VERCEL' in os.environ:
-        logger.warning("Bot em ambiente Vercel - polling não será iniciado. Use webhooks.")
-        return
-    
     # Se o bot já estiver executando, registramos o evento mas seguimos com
     # a inicialização. Isso permite que múltiplas chamadas da função não interrompam
     # o funcionamento do bot caso uma instância falhe.
@@ -6031,77 +6026,6 @@ def run_bot():
     finally:
         _bot_running = False
         logger.info("Bot stopped running")
-
-# Função para processar updates recebidos via webhook (para ambiente Vercel)
-def process_telegram_update(update):
-    """
-    Processa uma única atualização do Telegram recebida via webhook.
-    Essa função é chamada pelo endpoint webhook no ambiente Vercel.
-    
-    Args:
-        update (dict): Objeto de atualização do Telegram
-        
-    Returns:
-        dict: Resultado do processamento
-    """
-    try:
-        logger.info("Processando atualização do Telegram via webhook")
-        
-        # Verificar se há message no update
-        if 'message' in update:
-            message = update['message']
-            
-            # Processar comando /start
-            if 'text' in message and message['text'] == '/start':
-                user_id = message['from']['id']
-                logger.info(f"Comando /start recebido via webhook de {user_id}")
-                
-                # Chamar diretamente a função de handler do comando start
-                # Nota: Precisamos adaptar para trabalhar sem o objeto de mensagem do telebot
-                result = {'status': 'processed', 'command': 'start', 'user_id': user_id}
-                
-                # Enviar resposta via API HTTP diretamente, já que não temos o objeto bot aqui
-                import requests
-                
-                # Preparar a mensagem de resposta
-                welcome_text = (
-                    "👋 Bem-vindo(a) ao bot da UniTV!\n\n"
-                    "Aqui você pode gerenciar sua assinatura, obter suporte e muito mais."
-                )
-                
-                # Enviar a mensagem
-                response = requests.post(
-                    f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                    json={
-                        'chat_id': user_id,
-                        'text': welcome_text,
-                        'parse_mode': 'HTML'
-                    }
-                )
-                
-                if response.status_code == 200:
-                    logger.info(f"Resposta enviada para usuário {user_id} via webhook")
-                else:
-                    logger.error(f"Erro ao enviar resposta via webhook: {response.text}")
-                
-                return result
-                
-            # Adicionar mais handlers conforme necessário
-            
-        # Verificar se há callback_query no update
-        elif 'callback_query' in update:
-            callback = update['callback_query']
-            # Processe os callbacks conforme necessário
-            return {'status': 'callback_processed', 'callback_id': callback.get('id')}
-        
-        # Mensagem não processada
-        return {'status': 'unhandled_update', 'update_type': list(update.keys())}
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar update do Telegram: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return {'status': 'error', 'message': str(e)}
 
 if __name__ == "__main__":
     run_bot()
